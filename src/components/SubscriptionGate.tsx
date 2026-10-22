@@ -76,7 +76,7 @@ export function SubscriptionGate({ userId, children }: { userId: string; childre
         <div className="mt-5 space-y-2 text-xs text-stable-400">
           <div className="flex items-center gap-2"><CheckCircle2 size={13} className="text-gold-400" /> Paiement sécurisé par Stripe</div>
           <div className="flex items-center gap-2"><CheckCircle2 size={13} className="text-gold-400" /> Sans engagement, annulable à tout moment</div>
-          <div className="flex items-center gap-2"><CheckCircle2 size={13} className="text-gold-400" /> Tarif modifiable depuis votre compte Stripe</div>
+          <div className="flex items-center gap-2"><CheckCircle2 size={13} className="text-gold-400" /> Tarif fixe</div>
         </div>
 
         {authUser && (

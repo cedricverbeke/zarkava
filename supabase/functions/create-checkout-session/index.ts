@@ -56,13 +56,13 @@ Deno.serve(async (req: Request) => {
       phone_number_collection: { enabled: false },
       automatic_tax: { enabled: false },
       allow_promotion_codes: false,
-      payment_method_collection: "always",
+      payment_method_collection: "if_required",
       submit_type: "auto",
       customer_email: user.email ?? undefined,
       success_url: `${origin}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}?checkout=canceled`,
       line_items: [{ price: PRICE_ID, quantity: 1 }],
-      subscription_data: { metadata: { user_id: user.id } },
+      subscription_data: { metadata: { user_id: user.id }, trial_period_days: 14 },
       metadata: { user_id: user.id },
     };
 

@@ -31,55 +31,62 @@ export function FacturationPage() {
         const detail: DetailRow[] = [];
         let total = 0;
 
-        if (emp.role === 'cavalier' || emp.role === 'lad') {
-          // Count from planning entries done in the period, grouped by training category.
-          const periodEntries = planning.filter((p) => p.riderId === emp.id && p.date >= start && p.date <= end && p.done);
-          const counts: Record<TrainingCategory, number> = { lot: 0, longe: 0, natation: 0, autre: 0 };
-          periodEntries.forEach((p) => {
-            const tr = trainings.find((t) => t.id === p.trainingId);
-            const cat = tr?.category ?? 'lot';
-            counts[cat] += 1;
-          });
-          const r = grid?.rates ?? { lot: 0, longe: 0, natation: 0, douche: 0, nettoyage: 0, vidage: 0, nourriture: 0 };
-          const tr = grid?.trainingRates ?? {};
-          // Per-training pricing: if trainingRates has an entry for a specific training, use that price
-          const perTrainingTotals = new Map<string, { name: string; qty: number; unit: number }>();
-          const categoryTotals: Record<string, { qty: number; unit: number }> = {};
-          periodEntries.forEach((p) => {
-            const training = trainings.find((t) => t.id === p.trainingId);
-            const cat = training?.category ?? 'lot';
-            const customPrice = tr[p.trainingId];
-            if (customPrice !== undefined) {
-              const existing = perTrainingTotals.get(p.trainingId);
-              if (existing) existing.qty += 1;
-              else perTrainingTotals.set(p.trainingId, { name: training?.name ?? p.trainingId, qty: 1, unit: customPrice });
-            } else {
-              if (!categoryTotals[cat]) categoryTotals[cat] = { qty: 0, unit: r[cat as keyof typeof r] ?? 0 };
-              categoryTotals[cat].qty += 1;
-            }
-          });
-          // Push per-training rows
-          perTrainingTotals.forEach((v) => {
-            if (v.qty > 0 && v.unit > 0) {
-              const t = v.qty * v.unit;
-              detail.push({ label: v.name, qty: v.qty, unit: v.unit, total: t });
-              total += t;
-            }
-          });
-          // Push category rows (only for trainings without custom price)
-          const catLabels: Record<string, string> = { lot: 'Lots montés', longe: 'Longes', natation: 'Natation', autre: 'Autres' };
-          Object.entries(categoryTotals).forEach(([cat, { qty, unit }]) => {
-            if (qty > 0 && unit > 0) {
-              const t = qty * unit;
-              detail.push({ label: catLabels[cat] ?? cat, qty, unit, total: t });
-              total += t;
-            }
-          });
-          // Douches assigned to this rider
-          const periodDouches = douches.filter((d) => d.assignedTo === emp.id && d.date >= start && d.date <= end && d.done);
-          if (periodDouches.length > 0 && r.douche > 0) {
-            detail.push({ label: 'Douches', qty: periodDouches.length, unit: r.douche, total: periodDouches.length * r.douche });
-            total += periodDouches.length * r.douche;
+if (emp.role === 'cavalier' || emp.role === 'lad') {
+  // Count from planning entries done in the period, grouped by training category.
+  const periodEntries = planning.filter((p) => p.riderId === emp.id && p.date >= start && p.date <= end && p.done);
+  const counts: Record<TrainingCategory, number> = { lot: 0, longe: 0, natation: 0, paddock: 0, autre: 0 };
+  periodEntries.forEach((p) => {
+    const tr = trainings.find((t) => t.id === p.trainingId);
+    const cat = tr?.category ?? 'lot';
+    counts[cat] += 1;
+  });
+  const r = grid?.rates ?? { lot: 0, longe: 0, natation: 0, paddock: 0, douche: 0, nettoyage: 0, vidage: 0, nourriture: 0 };
+  const tr = grid?.trainingRates ?? {};
+  
+  const perTrainingTotals = new Map<string, { name: string; qty: number; unit: number }>();
+  const categoryTotals: Record<string, { qty: number; unit: number }> = {};
+  
+  periodEntries.forEach((p) => {
+    const training = trainings.find((t) => t.id === p.trainingId);
+    const cat = training?.category ?? 'lot';
+    const customPrice = tr[p.trainingId];
+    
+    if (customPrice !== undefined) {
+      const existing = perTrainingTotals.get(p.trainingId);
+      if (existing) existing.qty += 1;
+      else perTrainingTotals.set(p.trainingId, { name: training?.name ?? p.trainingId, qty: 1, unit: customPrice });
+    } else {
+      // Pour le paddock, le tarif unitaire est de 0€ par défaut
+      const defaultUnit = cat === 'paddock' ? 0 : (r[cat as keyof typeof r] ?? 0);
+      if (!categoryTotals[cat]) categoryTotals[cat] = { qty: 0, unit: defaultUnit };
+      categoryTotals[cat].qty += 1;
+    }
+  });
+
+  // Push per-training rows
+  perTrainingTotals.forEach((v) => {
+    if (v.qty > 0) { // On autorise l'affichage même si unit === 0 pour le paddock si souhaité
+      const t = v.qty * v.unit;
+      detail.push({ label: v.name, qty: v.qty, unit: v.unit, total: t });
+      total += t;
+    }
+  });
+
+  // Push category rows
+  const catLabels: Record<string, string> = { lot: 'Lots montés', longe: 'Longes', natation: 'Natation', paddock: 'Paddock', autre: 'Autres' };
+  Object.entries(categoryTotals).forEach(([cat, { qty, unit }]) => {
+    if (qty > 0 && (unit > 0 || cat === 'paddock')) { // Permet d'afficher les paddocks à 0€ dans le récapitulatif
+      const t = qty * unit;
+      detail.push({ label: catLabels[cat] ?? cat, qty, unit, total: t });
+      total += t;
+    }
+  });
+
+  // Douches assigned to this rider
+  const periodDouches = douches.filter((d) => d.assignedTo === emp.id && d.date >= start && d.date <= end && d.done);
+  if (periodDouches.length > 0 && r.douche > 0) {
+    detail.push({ label: 'Douches', qty: periodDouches.length, unit: r.douche, total: periodDouches.length * r.douche });
+    total += periodDouches.length * r.douche;
           }
         } else if (emp.role === 'palefrenier') {
           const periodSoins = soins.filter((s) => s.assignedTo === emp.id && s.date >= start && s.date <= end && s.done);

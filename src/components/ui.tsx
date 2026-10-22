@@ -92,7 +92,7 @@ export function ProgressGauge({ percent, level, label, pulse }: ProgressGaugePro
 }
 
 interface BadgeProps {
-  level: 'green' | 'orange' | 'red' | 'neutral' | 'blue';
+  level: 'green' | 'orange' | 'red' | 'neutral' | 'blue'| 'purple';
   children: ReactNode;
 }
 

@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Plus, Trash2, Sparkles, Check, ClipboardList, Repeat, AlertCircle, Calendar, FileText, Users, CalendarDays, Play, Pause, Pencil, CheckCircle2, X } from 'lucide-react';
 import { useApp } from '@/store';
-import type { Soin, SoinType, Routine, Weekday, WeekSchedule } from '@/types';
-import { todayISO, fmtDate, addDays } from '@/lib';
+import type { Soin, SoinType, Routine, Weekday, WeekSchedule, EmployeeRole } from '@/types';
+import { todayISO, fmtDate, addDays, roleLabel } from '@/lib';
 import { Badge, Confirm, EmptyState, Modal } from './ui';
 import { generatePdf } from '@/pdfUtils';
 
@@ -40,7 +40,9 @@ export function SoinsPage() {
   const [generatedNotice, setGeneratedNotice] = useState<{ count: number; start: string; end: string } | null>(null);
   const today = todayISO();
 
-  const palefreniers = employees.filter((e) => e.role === 'palefrenier');
+  // Inclusion des palefreniers, cavaliers et lads pour les routines et soins
+  const routineEmployees = employees.filter((e) => ['palefrenier', 'cavalier', 'lad'].includes(e.role));
+
   const sortedSoins = [...soins].sort((a, b) => a.date.localeCompare(b.date));
   const pending = sortedSoins.filter((s) => !s.done);
   const done = sortedSoins.filter((s) => s.done);
@@ -171,7 +173,7 @@ export function SoinsPage() {
       {tab === 'soins' && (
         <>
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <p className="text-sm text-stable-600">Suivi des soins quotidiens par palefrenier.</p>
+            <p className="text-sm text-stable-600">Suivi des tâches et soins quotidiens par intervenant.</p>
             <div className="flex gap-2">
               <button className="btn-outline" onClick={exportSoinsPdf}><FileText size={15} /> PDF</button>
               <button className="btn-primary" onClick={() => setCreating(true)}><Plus size={16} /> Demande de soin</button>
@@ -183,7 +185,7 @@ export function SoinsPage() {
             <SoinsColumn title="Réalisés" icon={<Check size={16} />} soins={done} getHorse={getHorse} getEmployee={getEmployee} today={today} onToggle={toggleDone} onDelete={(s) => setToDelete(s)} done />
           </div>
 
-          {creating && <SoinForm horses={horses} palefreniers={palefreniers} onClose={() => setCreating(false)} onSave={(s) => { setSoins((prev) => [...prev, s]); setCreating(false); }} />}
+          {creating && <SoinForm horses={horses} palefreniers={routineEmployees} onClose={() => setCreating(false)} onSave={(s) => { setSoins((prev) => [...prev, s]); setCreating(false); }} />}
         </>
       )}
 
@@ -198,7 +200,7 @@ export function SoinsPage() {
           </div>
 
           {routines.length === 0 ? (
-            <EmptyState icon={<Repeat size={24} />} title="Aucune routine" message="Créez une routine (ex: « Semaine A — Nettoyage ») pour définir les soins d'une semaine type." />
+            <EmptyState icon={<Repeat size={24} />} title="Aucune routine" message="Créez une routine (ex: « Semaine A — Nettoyage ») pour définir les tâches d'une semaine type." />
           ) : (
             <div className="space-y-3">
               {routines.map((r) => {
@@ -233,7 +235,7 @@ export function SoinsPage() {
             </div>
           )}
 
-          {creatingRoutine && <RoutineForm horses={horses.filter((h) => h.status !== 'sorti')} palefreniers={palefreniers} onClose={() => setCreatingRoutine(false)} onSave={createRoutine} />}
+          {creatingRoutine && <RoutineForm horses={horses.filter((h) => h.status !== 'sorti')} palefreniers={routineEmployees} onClose={() => setCreatingRoutine(false)} onSave={createRoutine} />}
         </>
       )}
 
@@ -364,7 +366,7 @@ function SoinsColumn({ title, icon, soins, getHorse, getEmployee, today, onToggl
   );
 }
 
-function SoinForm({ horses, palefreniers, onClose, onSave }: { horses: { id: string; name: string }[]; palefreniers: { id: string; firstName: string; lastName: string }[]; onClose: () => void; onSave: (s: Soin) => void }) {
+function SoinForm({ horses, palefreniers, onClose, onSave }: { horses: { id: string; name: string }[]; palefreniers: { id: string; firstName: string; lastName: string; role: EmployeeRole }[]; onClose: () => void; onSave: (s: Soin) => void }) {
   const [horseId, setHorseId] = useState(horses[0]?.id ?? '');
   const [type, setType] = useState<SoinType>('nettoyage_box');
   const [date, setDate] = useState(todayISO());
@@ -372,14 +374,19 @@ function SoinForm({ horses, palefreniers, onClose, onSave }: { horses: { id: str
   const [note, setNote] = useState('');
   const [price, setPrice] = useState(15);
   return (
-    <Modal open onClose={onClose} title="Demande de soin" subtitle="Assignez un soin ou entretien à un palefrenier"
+    <Modal open onClose={onClose} title="Demande de soin" subtitle="Assignez un soin ou entretien à un membre du personnel"
       footer={<div className="flex gap-3 justify-end"><button className="btn-outline" onClick={onClose}>Annuler</button><button className="btn-primary" disabled={!horseId} onClick={() => onSave({ id: `s${Date.now()}`, horseId, type, date, done: false, assignedTo, note, price: type === 'soin_particulier' ? price : undefined })}>Créer</button></div>}
     >
       <div className="space-y-4">
         <div><label className="label">Cheval</label><select className="input" value={horseId} onChange={(e) => setHorseId(e.target.value)}>{horses.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}</select></div>
         <div><label className="label">Type de soin</label><select className="input" value={type} onChange={(e) => setType(e.target.value as SoinType)}>{Object.entries(soinTypeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
         <div><label className="label">Date</label><input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} /></div>
-        <div><label className="label">Palefrenier</label><select className="input" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)}>{palefreniers.map((p) => <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>)}</select></div>
+        <div>
+          <label className="label">Intervenant</label>
+          <select className="input" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)}>
+            {palefreniers.map((p) => <option key={p.id} value={p.id}>{p.firstName} {p.lastName} ({roleLabel(p.role)})</option>)}
+          </select>
+        </div>
         {type === 'soin_particulier' && <div><label className="label">Prix (€)</label><input type="number" step="0.5" className="input" value={price} onChange={(e) => setPrice(Number(e.target.value))} /></div>}
         <div><label className="label">Note</label><input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Précisions, consignes…" /></div>
       </div>
@@ -387,7 +394,7 @@ function SoinForm({ horses, palefreniers, onClose, onSave }: { horses: { id: str
   );
 }
 
-function RoutineForm({ horses, palefreniers, onClose, onSave }: { horses: { id: string; name: string; box: string }[]; palefreniers: { id: string; firstName: string; lastName: string }[]; onClose: () => void; onSave: (r: Routine) => void }) {
+function RoutineForm({ horses, palefreniers, onClose, onSave }: { horses: { id: string; name: string; box: string }[]; palefreniers: { id: string; firstName: string; lastName: string; role: EmployeeRole }[]; onClose: () => void; onSave: (r: Routine) => void }) {
   const [name, setName] = useState('');
   const [palefrenierIds, setPalefrenierIds] = useState<string[]>(palefreniers[0] ? [palefreniers[0].id] : []);
   const [startDate, setStartDate] = useState(todayISO());
@@ -424,13 +431,13 @@ function RoutineForm({ horses, palefreniers, onClose, onSave }: { horses: { id: 
   }
 
   return (
-    <Modal open onClose={onClose} title="Nouvelle routine" subtitle="Définissez les soins d'une semaine type (ex: Semaine A)" size="lg"
+    <Modal open onClose={onClose} title="Nouvelle routine" subtitle="Définissez les tâches d'une semaine type (ex: Semaine A)" size="lg"
       footer={<div className="flex gap-3 justify-end"><button className="btn-outline" onClick={onClose}>Annuler</button><button className="btn-primary" disabled={!valid} onClick={() => onSave({ id: `r${Date.now()}`, name, palefrenierIds, weekdays: Array.from(weekdays), startDate, endDate, type, horseIds: Array.from(selectedHorses), note, customPrice: type === 'soin_particulier' ? customPrice : undefined })}><Sparkles size={15} /> Créer & générer</button></div>}
     >
       <div className="space-y-5">
         <div className="grid sm:grid-cols-2 gap-4">
-          <div className="sm:col-span-2"><label className="label">Nom de la routine</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Semaine A — Nettoyage matinal" /></div>
-          <div><label className="label">Type de soin</label><select className="input" value={type} onChange={(e) => setType(e.target.value as SoinType)}>{Object.entries(soinTypeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+          <div className="sm:col-span-2"><label className="label">Nom de la routine</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Semaine A — Entraînement / Soins" /></div>
+          <div><label className="label">Type de soin / tâche</label><select className="input" value={type} onChange={(e) => setType(e.target.value as SoinType)}>{Object.entries(soinTypeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
           <div><label className="label">Date de début</label><input type="date" className="input" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></div>
           <div><label className="label">Date de fin</label><input type="date" className="input" value={endDate} onChange={(e) => setEndDate(e.target.value)} /></div>
         </div>
@@ -445,17 +452,18 @@ function RoutineForm({ horses, palefreniers, onClose, onSave }: { horses: { id: 
           <div><label className="label">Précision</label><input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ex: Pansement, surveillance boiterie…" /></div>
         )}
 
-        {/* Multiple people selector */}
+        {/* Multiple people selector (Palefreniers, Cavaliers, Lads) */}
         <div>
           <label className="label flex items-center gap-2"><Users size={14} /> Intervenants ({palefrenierIds.length})</label>
-          <p className="text-xs text-stable-500 mb-2">Sélectionnez une ou plusieurs personnes. Le montant sera partagé équitablement.</p>
+          <p className="text-xs text-stable-500 mb-2">Sélectionnez un ou plusieurs intervenants (palefreniers, cavaliers, lads).</p>
           <div className="flex flex-wrap gap-2">
             {palefreniers.map((p) => {
               const sel = palefrenierIds.includes(p.id);
               return (
                 <button key={p.id} type="button" onClick={() => togglePerson(p.id)}
-                  className={`px-3 py-2 rounded-lg text-sm font-semibold transition ${sel ? 'bg-stable-700 text-white' : 'bg-stable-100 text-stable-600 hover:bg-stable-200'}`}>
-                  {p.firstName} {p.lastName}
+                  className={`px-3 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2 ${sel ? 'bg-stable-700 text-white' : 'bg-stable-100 text-stable-600 hover:bg-stable-200'}`}>
+                  <span>{p.firstName} {p.lastName}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${sel ? 'bg-stable-800 text-stable-200' : 'bg-stable-200 text-stable-700'}`}>{roleLabel(p.role)}</span>
                 </button>
               );
             })}
@@ -501,7 +509,7 @@ function RoutineForm({ horses, palefreniers, onClose, onSave }: { horses: { id: 
         </div>
 
         <div className="rounded-xl bg-stable-50 px-4 py-3 text-sm text-stable-600">
-          Cette routine générera <strong className="text-stable-900">{estCount} soin{estCount > 1 ? 's' : ''}</strong> sur la période du {fmtDate(startDate)} au {fmtDate(endDate)}{palefrenierIds.length > 1 ? ` · partagés entre ${palefrenierIds.length} intervenants` : ''}.
+          Cette routine générera <strong className="text-stable-900">{estCount} tâche(s)</strong> sur la période du {fmtDate(startDate)} au {fmtDate(endDate)}{palefrenierIds.length > 1 ? ` · partagées entre ${palefrenierIds.length} intervenants` : ''}.
         </div>
       </div>
     </Modal>

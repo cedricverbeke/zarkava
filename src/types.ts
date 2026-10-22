@@ -57,6 +57,7 @@ export interface TarifGrid {
     lot: number;
     longe: number;
     natation: number;
+    paddock: number;
     douche: number;
     nettoyage: number;
     vidage: number;
@@ -66,7 +67,7 @@ export interface TarifGrid {
 }
 
 // Category drives how a planning entry is billed for the rider.
-export type TrainingCategory = 'lot' | 'longe' | 'natation' | 'autre';
+export type TrainingCategory = 'lot' | 'longe' | 'paddock' |'natation' | 'autre';
 
 export interface Training {
   id: string;

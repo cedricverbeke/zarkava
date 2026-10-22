@@ -20,13 +20,15 @@ const categoryLabels: Record<TrainingCategory, string> = {
   lot: 'Lot monté',
   longe: 'Longe',
   natation: 'Natation',
+  paddock: 'Paddock',
   autre: 'Autre',
 };
 
-const categoryColors: Record<TrainingCategory, 'blue' | 'orange' | 'green' | 'neutral'> = {
+const categoryColors: Record<TrainingCategory, 'blue' | 'orange' | 'green' | 'purple' | 'neutral'> = {
   lot: 'blue',
   longe: 'orange',
   natation: 'green',
+  paddock: 'purple',
   autre: 'neutral',
 };
 
@@ -97,7 +99,7 @@ function TrainingForm({ training, onClose, onSave }: { training: Training | null
         <div className="grid grid-cols-2 gap-4">
           <div><label className="label">Catégorie (facturation)</label>
             <select className="input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value as TrainingCategory })}>
-              <option value="lot">Lot monté</option><option value="longe">Longe</option><option value="natation">Natation</option><option value="autre">Autre</option>
+              <option value="lot">Lot monté</option><option value="longe">Longe</option><option value="paddock">Paddock (0€)</option><option value="natation">Natation</option><option value="autre">Autre</option>
             </select>
           </div>
           <div><label className="label">Intensité</label>
