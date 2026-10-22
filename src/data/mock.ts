@@ -97,8 +97,8 @@ export const mockEmployees: Employee[] = [
 ];
 
 export const mockTarifGrids: TarifGrid[] = [
-  { id: 'g1', name: 'Grille Cavalier standard', role: 'cavalier', rates: { lot: 22, longe: 8, natation: 10, douche: 5, nettoyage: 0, vidage: 0, nourriture: 0 }, trainingRates: {} },
-  { id: 'g2', name: 'Grille Lad', role: 'lad', rates: { lot: 18, longe: 6, natation: 8, douche: 5, nettoyage: 0, vidage: 0, nourriture: 0 }, trainingRates: {} },
+  { id: 'g1', name: 'Grille Cavalier standard', role: 'cavalier', rates: { lot: 22, longe: 8, natation: 10, paddock: 0, douche: 5, nettoyage: 0, vidage: 0, nourriture: 0 }, trainingRates: {} },
+  { id: 'g2', name: 'Grille Lad', role: 'lad', rates: { lot: 18, longe: 6, natation: 8, paddock: 0, douche: 5, nettoyage: 0, vidage: 0, nourriture: 0 }, trainingRates: {} },
 ];
 
 const tomorrow = daysAhead(1);

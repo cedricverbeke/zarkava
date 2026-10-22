@@ -249,7 +249,7 @@ function employees_colorIndex(_emp: Employee | null, _grids: TarifGrid[]): numbe
 function TarifForm({ grid, trainings, onClose, onSave }: { grid: TarifGrid | null; trainings: { id: string; name: string }[]; onClose: () => void; onSave: (g: TarifGrid) => void }) {
   const [form, setForm] = useState<TarifGrid>(grid ?? {
     id: `g${Date.now()}`, name: '', role: 'cavalier',
-    rates: { lot: 0, longe: 0, natation: 0, douche: 0, nettoyage: 0, vidage: 0, nourriture: 0 },
+    rates: { lot: 0, longe: 0, natation: 0, paddock: 0, douche: 0, nettoyage: 0, vidage: 0, nourriture: 0 },
     trainingRates: {},
   });
   const [selectedTraining, setSelectedTraining] = useState('');
@@ -264,9 +264,9 @@ function TarifForm({ grid, trainings, onClose, onSave }: { grid: TarifGrid | nul
   function setTrainingRate(tid: string, v: number) { setForm((f) => ({ ...f, trainingRates: { ...f.trainingRates, [tid]: v } })); }
   function removeTrainingRate(tid: string) { setForm((f) => { const next = { ...f.trainingRates }; delete next[tid]; return { ...f, trainingRates: next }; }); }
   const isPalefrenier = form.role === 'palefrenier';
-  const cavalierKeys: (keyof TarifGrid['rates'])[] = isPalefrenier ? ['nettoyage', 'vidage', 'nourriture', 'douche'] : ['lot', 'longe', 'natation', 'douche'];
+  const cavalierKeys: (keyof TarifGrid['rates'])[] = isPalefrenier ? ['nettoyage', 'vidage', 'nourriture', 'douche'] : ['lot', 'longe', 'natation', 'paddock', 'douche'];
   const rateLabels: Record<keyof TarifGrid['rates'], string> = {
-    lot: 'Lot monté', longe: 'Longe', natation: 'Natation', douche: 'Douche',
+    lot: 'Lot monté', longe: 'Longe', natation: 'Natation', paddock: 'Paddock', douche: 'Douche',
     nettoyage: 'Nettoyage box', vidage: 'Vidage box', nourriture: 'Nourriture',
   };
   const rateSuffix: Partial<Record<keyof TarifGrid['rates'], string>> = isPalefrenier ? { nettoyage: '/cheval', vidage: '/cheval', nourriture: ' (forfait)' } : {};

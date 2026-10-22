@@ -42,7 +42,7 @@ export function Dashboard({ setPage }: { setPage: (p: TrainerPage) => void }) {
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-end justify-between gap-4">
           <div>
             <p className="text-stable-300 text-sm capitalize">{fmtDateLong(today)}</p>
-            <h2 className="font-display text-2xl lg:text-3xl font-bold mt-1">Bonjour, Antoine</h2>
+            <h2 className="font-display text-2xl lg:text-3xl font-bold mt-1">Bonjour, Angela</h2>
             <p className="text-stable-300 mt-2 text-sm max-w-lg">Voici l'état de votre écurie aujourd'hui. {ferrureAlerts.length > 0 && <span className="text-gold-300">{ferrureAlerts.length} alerte(s) de ferrage à traiter.</span>}</p>
           </div>
           <div className="flex gap-3">

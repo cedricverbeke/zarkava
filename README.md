@@ -6,8 +6,11 @@ Application web de gestion d'écurie (chevaux, employés, planning, ferrage, soi
 
 - Vite + React + TypeScript
 - Tailwind CSS
-- Supabase (auth, base de données, edge functions)
-- Stripe (abonnement mensuel via Hosted Checkout)
+- Supabase (authentification et base de données)
+
+Après la création d'un compte, toutes les fonctionnalités et données du compte
+sont accessibles sans abonnement ni paiement. Les données restent isolées par
+compte.
 
 ## Développement local
 
@@ -56,10 +59,13 @@ Dans **Site settings → Environment variables**, ajouter :
 | `VITE_SUPABASE_URL` | l'URL Supabase (visible dans `.env`) |
 | `VITE_SUPABASE_ANON_KEY` | la clé anon Supabase (visible dans `.env`) |
 
-Ces deux variables sont nécessaires au frontend. **Ne pas** mettre
-`STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRICE_ID` sur Netlify :
-ce sont des secrets serveur déjà configurés sur les edge functions Supabase
-via le panneau Stripe de Bolt.
+Ces deux variables sont nécessaires au frontend.
+
+Après le déploiement de cette version, supprimez dans Supabase les Edge
+Functions `create-checkout-session` et `stripe-webhook` si elles y sont encore
+déployées, puis désactivez le webhook Stripe et supprimez les secrets Stripe
+du projet. Le retrait des fichiers du dépôt ne désinstalle pas les fonctions
+déjà présentes sur Supabase.
 
 ### 4. (Optionnel) Déploiement automatique par GitHub Actions
 
@@ -73,25 +79,6 @@ Le workflow `.github/workflows/deploy-netlify.yml` déploie à chaque push sur
 Si vous préférez laisser Netlify déploiement auto via son intégration GitHub
 (recommandé), vous pouvez ignorer le workflow.
 
-### 5. Webhook Stripe
-
-Le webhook qui met à jour l'abonnement pointe vers :
-
-```
-https://<votre-site>.netlify.app  →  (le frontend)
-https://<projet-supabase>.supabase.co/functions/v1/stripe-webhook  →  (edge function)
-```
-
-Dans le dashboard Stripe → Developers → Webhooks, l'endpoint doit être
-`https://<projet-supabase>.supabase.co/functions/v1/stripe-webhook`
-(l'edge function Supabase, pas Netlify). Bolt configure ce webhook
-automatiquement via le panneau Stripe.
-
-### 6. Mise en production Stripe
-
-- Passer du mode test au mode live dans le panneau Stripe de Bolt.
-- Mettre à jour `STRIPE_PRICE_ID` avec l'ID d'un prix **live** (dashboard Stripe → Produits).
-
 ## Structure
 
 ```
@@ -99,11 +86,6 @@ netlify.toml                      # config build + SPA redirect
 public/_redirects                 # fallback SPA (backup)
 .github/workflows/deploy-netlify.yml  # CI optionnelle
 supabase/
-  config.toml                     # config edge functions
-  functions/
-    create-checkout-session/      # création session Stripe Checkout
-    stripe-webhook/               # webhook Stripe (abonnement, factures)
   migrations/                     # schéma SQL Supabase
 src/                              # application React
-STRIPE_INTEGRATION_TODO.md        # guide d'intégration Stripe
 ```

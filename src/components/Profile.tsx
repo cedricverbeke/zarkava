@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Fingerprint, Lock, User as UserIcon, Mail, Check, LogOut, Shield, KeyRound, Info, Camera, Image as ImageIcon, CreditCard, ExternalLink, Receipt } from 'lucide-react';
+import { Fingerprint, Lock, User as UserIcon, Mail, Check, LogOut, Shield, KeyRound, Info, Camera, Image as ImageIcon } from 'lucide-react';
 import { useApp, trainerUser } from '@/store';
 import { compressImage } from '@/imageUtils';
 
@@ -150,21 +150,6 @@ export function ProfilePage() {
         ) : (
           <div className="rounded-xl bg-stable-50 px-4 py-3 text-sm text-stable-500">Votre navigateur ne supporte pas WebAuthn. Utilisez Safari, Chrome ou Edge récent.</div>
         )}
-      </div>
-
-      {/* Subscription & billing */}
-      <div className="card p-6">
-        <h3 className="font-display font-bold text-stable-900 mb-4 flex items-center gap-2"><CreditCard size={18} /> Abonnement & facturation</h3>
-        <p className="text-sm text-stable-600 mb-4">Gérez votre abonnement, vos moyens de paiement et téléchargez vos factures depuis le portail Stripe.</p>
-        <a
-          href="https://billing.stripe.com/p/login/aFacN434W845ehHeeD4Rq00"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-primary inline-flex items-center gap-2"
-        >
-          <Receipt size={15} /> Gérer mon abonnement / Factures
-          <ExternalLink size={14} className="opacity-70" />
-        </a>
       </div>
 
       <div className="flex justify-end">

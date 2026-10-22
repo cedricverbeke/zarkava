@@ -140,17 +140,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     if (error) return { error: error.message };
     const u = data.session ? authSessionToUser(data.session) : null;
-    // Create a 30-day trial subscription row for this new trainer.
-    if (u) {
-      const trialEnds = new Date();
-      trialEnds.setDate(trialEnds.getDate() + 30);
-      await supabase.from('subscriptions').upsert({
-        user_id: u.id,
-        status: 'trialing',
-        trial_started_at: new Date().toISOString(),
-        trial_ends_at: trialEnds.toISOString(),
-      }, { onConflict: 'user_id' });
-    }
     setAuthUser(u);
     setAuthMode('live');
     if (u) setSession({ kind: 'trainer', user: u });

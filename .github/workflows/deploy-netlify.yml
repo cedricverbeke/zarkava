@@ -4,8 +4,6 @@
 #   NETLIFY_SITE_ID        — site API ID from Netlify site settings → General → Site details
 # Add the same env vars to Netlify (Site settings → Environment variables):
 #   VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
-# Stripe secrets (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID) are NOT
-# needed by the frontend — they live as Supabase edge-function secrets configured in Bolt.
 
 name: Build and deploy to Netlify
 
