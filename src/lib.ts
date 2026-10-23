@@ -1,7 +1,21 @@
 // Ferrure cycle: 21 days. Vermifuge cycle: 180 days.
 
+import type { Employee, EmployeeRole } from './types';
+
 export const FERRURE_CYCLE_DAYS = 21;
 export const VERMIFUGE_CYCLE_DAYS = 180;
+
+export function employeeHasRole(employee: Employee, role: EmployeeRole): boolean {
+  return (employee.roles?.length ? employee.roles : [employee.role]).includes(role);
+}
+
+export function employeeRoleLabels(employee: Pick<Employee, 'role' | 'roles'>): string {
+  return [...new Set(employee.roles?.length ? employee.roles : [employee.role])].map(roleLabel).join(' · ');
+}
+
+export function employeeTarifGridId(employee: Employee, role: EmployeeRole): string | undefined {
+  return employee.tarifGridIds?.[role] ?? (employee.role === role ? employee.tarifGridId : undefined);
+}
 
 export function daysSince(isoDate: string): number {
   const d = new Date(isoDate + 'T00:00:00');

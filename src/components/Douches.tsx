@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Droplets, Check, Clock, FileText, Calendar, CheckCheck, RefreshCw, Pencil } from 'lucide-react';
 import { useApp } from '@/store';
 import type { Douche } from '@/types';
-import { todayISO, fmtDate } from '@/lib';
+import { employeeHasRole, todayISO, fmtDate } from '@/lib';
 import { generatePdf } from '@/pdfUtils';
 import { Badge, EmptyState, Modal } from './ui';
 
@@ -12,7 +12,7 @@ export function DouchesPage() {
   const [editing, setEditing] = useState<Douche | null>(null);
 
   const activeHorses = horses.filter((h) => h.status === 'actif');
-  const assignables = employees.filter((e) => e.role === 'cavalier' || e.role === 'lad' || e.role === 'palefrenier');
+  const assignables = employees.filter((e) => employeeHasRole(e, 'cavalier') || employeeHasRole(e, 'lad') || employeeHasRole(e, 'palefrenier'));
 
   const dayDouches = useMemo(() => douches.filter((d) => d.date === date), [douches, date]);
 

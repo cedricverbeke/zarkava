@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Plus, Trash2, Sparkles, Check, ClipboardList, Repeat, AlertCircle, Calendar, FileText, Users, CalendarDays, Play, Pause, Pencil, CheckCircle2, X } from 'lucide-react';
 import { useApp } from '@/store';
 import type { Soin, SoinType, Routine, Weekday, WeekSchedule, EmployeeRole } from '@/types';
-import { todayISO, fmtDate, addDays, roleLabel } from '@/lib';
+import { employeeHasRole, employeeRoleLabels, todayISO, fmtDate, addDays } from '@/lib';
 import { Badge, Confirm, EmptyState, Modal } from './ui';
 import { generatePdf } from '@/pdfUtils';
 
@@ -41,7 +41,7 @@ export function SoinsPage() {
   const today = todayISO();
 
   // Inclusion des palefreniers, cavaliers et lads pour les routines et soins
-  const routineEmployees = employees.filter((e) => ['palefrenier', 'cavalier', 'lad'].includes(e.role));
+  const routineEmployees = employees.filter((e) => employeeHasRole(e, 'palefrenier') || employeeHasRole(e, 'cavalier') || employeeHasRole(e, 'lad'));
 
   const sortedSoins = [...soins].sort((a, b) => a.date.localeCompare(b.date));
   const pending = sortedSoins.filter((s) => !s.done);
@@ -366,7 +366,7 @@ function SoinsColumn({ title, icon, soins, getHorse, getEmployee, today, onToggl
   );
 }
 
-function SoinForm({ horses, palefreniers, onClose, onSave }: { horses: { id: string; name: string }[]; palefreniers: { id: string; firstName: string; lastName: string; role: EmployeeRole }[]; onClose: () => void; onSave: (s: Soin) => void }) {
+function SoinForm({ horses, palefreniers, onClose, onSave }: { horses: { id: string; name: string }[]; palefreniers: { id: string; firstName: string; lastName: string; role: EmployeeRole; roles?: EmployeeRole[] }[]; onClose: () => void; onSave: (s: Soin) => void }) {
   const [horseId, setHorseId] = useState(horses[0]?.id ?? '');
   const [type, setType] = useState<SoinType>('nettoyage_box');
   const [date, setDate] = useState(todayISO());
@@ -384,7 +384,7 @@ function SoinForm({ horses, palefreniers, onClose, onSave }: { horses: { id: str
         <div>
           <label className="label">Intervenant</label>
           <select className="input" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)}>
-            {palefreniers.map((p) => <option key={p.id} value={p.id}>{p.firstName} {p.lastName} ({roleLabel(p.role)})</option>)}
+            {palefreniers.map((p) => <option key={p.id} value={p.id}>{p.firstName} {p.lastName} ({employeeRoleLabels(p)})</option>)}
           </select>
         </div>
         {type === 'soin_particulier' && <div><label className="label">Prix (€)</label><input type="number" step="0.5" className="input" value={price} onChange={(e) => setPrice(Number(e.target.value))} /></div>}
@@ -394,7 +394,7 @@ function SoinForm({ horses, palefreniers, onClose, onSave }: { horses: { id: str
   );
 }
 
-function RoutineForm({ horses, palefreniers, onClose, onSave }: { horses: { id: string; name: string; box: string }[]; palefreniers: { id: string; firstName: string; lastName: string; role: EmployeeRole }[]; onClose: () => void; onSave: (r: Routine) => void }) {
+function RoutineForm({ horses, palefreniers, onClose, onSave }: { horses: { id: string; name: string; box: string }[]; palefreniers: { id: string; firstName: string; lastName: string; role: EmployeeRole; roles?: EmployeeRole[] }[]; onClose: () => void; onSave: (r: Routine) => void }) {
   const [name, setName] = useState('');
   const [palefrenierIds, setPalefrenierIds] = useState<string[]>(palefreniers[0] ? [palefreniers[0].id] : []);
   const [startDate, setStartDate] = useState(todayISO());
@@ -463,7 +463,7 @@ function RoutineForm({ horses, palefreniers, onClose, onSave }: { horses: { id: 
                 <button key={p.id} type="button" onClick={() => togglePerson(p.id)}
                   className={`px-3 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2 ${sel ? 'bg-stable-700 text-white' : 'bg-stable-100 text-stable-600 hover:bg-stable-200'}`}>
                   <span>{p.firstName} {p.lastName}</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${sel ? 'bg-stable-800 text-stable-200' : 'bg-stable-200 text-stable-700'}`}>{roleLabel(p.role)}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${sel ? 'bg-stable-800 text-stable-200' : 'bg-stable-200 text-stable-700'}`}>{employeeRoleLabels(p)}</span>
                 </button>
               );
             })}

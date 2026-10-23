@@ -1,6 +1,6 @@
 import { AlertTriangle, CalendarDays, Anvil, HeartPulse, Users, Zap, TrendingUp, ChevronRight, Activity } from 'lucide-react';
 import { useApp } from '@/store';
-import { alertLevel, daysUntilNext, fmtDateLong, FERRURE_CYCLE_DAYS, VERMIFUGE_CYCLE_DAYS, todayISO, roleLabel } from '@/lib';
+import { employeeHasRole, alertLevel, daysUntilNext, fmtDateLong, FERRURE_CYCLE_DAYS, VERMIFUGE_CYCLE_DAYS, todayISO, roleLabel } from '@/lib';
 import type { TrainerPage } from './TrainerShell';
 import { Badge, ProgressGauge } from './ui';
 
@@ -28,8 +28,8 @@ export function Dashboard({ setPage }: { setPage: (p: TrainerPage) => void }) {
 
   const counts = {
     horses: activeHorses.length,
-    riders: employees.filter((e) => e.role === 'cavalier' || e.role === 'lad').length,
-    palefreniers: employees.filter((e) => e.role === 'palefrenier').length,
+    riders: employees.filter((e) => employeeHasRole(e, 'cavalier') || employeeHasRole(e, 'lad')).length,
+    palefreniers: employees.filter((e) => employeeHasRole(e, 'palefrenier')).length,
     todayLots: todayLots.length,
     pendingSoins: pendingSoins.length,
   };

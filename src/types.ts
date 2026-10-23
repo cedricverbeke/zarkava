@@ -36,6 +36,7 @@ export interface Employee {
   lastName: string;
   phone: string;
   role: EmployeeRole;
+  roles?: EmployeeRole[];
   pin?: string;
   color?: string; // pastel color for planning rows (hex)
   // Palefrenier pricing (à l'acte)
@@ -46,6 +47,7 @@ export interface Employee {
     soinParticulier: number;
   };
   tarifGridId?: string;
+  tarifGridIds?: Partial<Record<EmployeeRole, string>>;
   advances?: { id: string; date: string; amount: number; method: string }[];
 }
 

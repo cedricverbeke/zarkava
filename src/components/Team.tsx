@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Plus, Pencil, Trash2, Users, Phone, Grid3x3, Save, X, Palette } from 'lucide-react';
 import { useApp } from '@/store';
 import type { Employee, EmployeeRole, TarifGrid } from '@/types';
-import { roleLabel, DEFAULT_PALEFRENIER_PRICING } from '@/lib';
+import { employeeHasRole, employeeRoleLabels, employeeTarifGridId, roleLabel, DEFAULT_PALEFRENIER_PRICING } from '@/lib';
 import { Badge, Confirm, EmptyState, Modal } from './ui';
 
 const roles: EmployeeRole[] = ['cavalier', 'lad', 'palefrenier', 'marechal'];
@@ -61,6 +61,11 @@ export function TeamPage() {
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {employees.map((e) => {
                 const stats = riderStats[e.id];
+                const riderRole = (['cavalier', 'lad'] as const).find((role) => employeeHasRole(e, role));
+                const riderGrid = riderRole && tarifGrids.find((g) => g.id === employeeTarifGridId(e, riderRole) && g.role === riderRole);
+                const palefrenierGrid = employeeHasRole(e, 'palefrenier')
+                  ? tarifGrids.find((g) => g.id === employeeTarifGridId(e, 'palefrenier') && g.role === 'palefrenier')
+                  : undefined;
                 return (
                   <div key={e.id} className="card p-5 group hover:shadow-md transition">
                     <div className="flex items-start justify-between gap-3">
@@ -68,7 +73,7 @@ export function TeamPage() {
                         <div className="w-11 h-11 rounded-2xl text-white flex items-center justify-center font-semibold shrink-0" style={{ backgroundColor: e.color ?? '#2c4a47' }}>{e.firstName[0]}{e.lastName[0]}</div>
                         <div className="min-w-0">
                           <h3 className="font-semibold text-stable-900 truncate">{e.firstName} {e.lastName}</h3>
-                          <Badge level="neutral">{roleLabel(e.role)}</Badge>
+                          <Badge level="neutral">{employeeRoleLabels(e)}</Badge>
                         </div>
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
@@ -79,7 +84,7 @@ export function TeamPage() {
                     <div className="mt-3 space-y-1.5 text-sm text-stable-600">
                       <div className="flex items-center gap-2"><Phone size={13} className="text-stable-400" /> {e.phone}</div>
                       {e.pin && <div className="flex items-center gap-2"><span className="text-stable-400 text-xs">PIN</span> <span className="font-mono tracking-widest text-stable-800">••••</span></div>}
-                      {(e.role === 'cavalier' || e.role === 'lad') && e.color && (
+                      {riderRole && e.color && (
                         <div className="flex items-center gap-2"><Palette size={13} className="text-stable-400" /> <span className="inline-block w-4 h-4 rounded" style={{ backgroundColor: e.color }} /> Couleur planning</div>
                       )}
                       {stats && (stats.lots > 0 || stats.longes > 0 || stats.natation > 0) && (
@@ -89,7 +94,19 @@ export function TeamPage() {
                           <span className="chip bg-emerald-100 text-emerald-700">Natation: {stats.natation}</span>
                         </div>
                       )}
-                      {e.pricing && <div className="text-xs text-stable-500 mt-2">Nettoyage: {e.pricing.nettoyage}€ · Vidage: {e.pricing.vidage}€ · Nourriture: {e.pricing.nourriture}€</div>}
+                      {riderGrid && (
+                        <div className="text-xs text-stable-500 mt-2">
+                          <div className="font-medium text-stable-700">Grille {roleLabel(riderRole)} : {riderGrid.name}</div>
+                          <>Lot: {riderGrid.rates.lot}€ · Longe: {riderGrid.rates.longe}€ · Natation: {riderGrid.rates.natation}€</>
+                        </div>
+                      )}
+                      {palefrenierGrid && (
+                        <div className="text-xs text-stable-500 mt-2">
+                          <div className="font-medium text-stable-700">Grille Palefrenier : {palefrenierGrid.name}</div>
+                          Nettoyage: {palefrenierGrid.rates.nettoyage}€ · Vidage: {palefrenierGrid.rates.vidage}€ · Nourriture: {palefrenierGrid.rates.nourriture}€ · Douche: {palefrenierGrid.rates.douche}€
+                        </div>
+                      )}
+                      {employeeHasRole(e, 'palefrenier') && !palefrenierGrid && e.pricing && <div className="text-xs text-stable-500 mt-2">Tarif personnalisé — Nettoyage: {e.pricing.nettoyage}€ · Vidage: {e.pricing.vidage}€ · Nourriture: {e.pricing.nourriture}€</div>}
                     </div>
                   </div>
                 );
@@ -162,7 +179,7 @@ function computeRiderStats(
   employees: Employee[],
 ): Record<string, { lots: number; longes: number; natation: number }> {
   const out: Record<string, { lots: number; longes: number; natation: number }> = {};
-  employees.filter((e) => e.role === 'cavalier' || e.role === 'lad').forEach((e) => {
+  employees.filter((e) => employeeHasRole(e, 'cavalier') || employeeHasRole(e, 'lad')).forEach((e) => {
     out[e.id] = { lots: 0, longes: 0, natation: 0 };
   });
   return out;
@@ -170,34 +187,68 @@ function computeRiderStats(
 
 function EmployeeForm({ employee, tarifGrids, onClose, onSave }: { employee: Employee | null; tarifGrids: TarifGrid[]; onClose: () => void; onSave: (e: Employee) => void }) {
   const [form, setForm] = useState<Employee>(
-    employee ?? {
+    employee ? {
+      ...employee,
+      tarifGridIds: employee.tarifGridIds ?? { [employee.role]: employee.tarifGridId },
+    } : {
       id: `e${Date.now()}`,
       firstName: '', lastName: '', phone: '', role: 'cavalier', pin: '',
       color: PALETTE[employees_colorIndex(employee, tarifGrids) % PALETTE.length],
-      pricing: { ...DEFAULT_PALEFRENIER_PRICING },
     },
   );
 
   function set<K extends keyof Employee>(k: K, v: Employee[K]) { setForm((f) => ({ ...f, [k]: v })); }
   function setPrice(k: keyof NonNullable<Employee['pricing']>, v: number) { setForm((f) => ({ ...f, pricing: { ...f.pricing!, [k]: v } })); }
+  function setRole(role: EmployeeRole) {
+    setForm((f) => ({
+      ...f,
+      role,
+      roles: undefined,
+      pricing: role === 'palefrenier' ? f.pricing ?? { ...DEFAULT_PALEFRENIER_PRICING } : f.pricing,
+    }));
+  }
+  function setPalefrenierRole(enabled: boolean) {
+    setForm((f) => ({
+      ...f,
+      roles: enabled ? [...new Set([f.role, 'palefrenier' as const])] : undefined,
+      pricing: enabled ? f.pricing ?? { ...DEFAULT_PALEFRENIER_PRICING } : f.pricing,
+    }));
+  }
+  function setGrid(role: EmployeeRole, id: string) {
+    setForm((f) => ({
+      ...f,
+      tarifGridIds: { ...f.tarifGridIds, [role]: id || undefined },
+      tarifGridId: f.role === role ? id || undefined : f.tarifGridId,
+    }));
+  }
 
-  const showPricing = form.role === 'palefrenier';
+  const hasRiderRole = form.role === 'cavalier' || form.role === 'lad';
+  const hasPalefrenierRole = form.role === 'palefrenier' || employeeHasRole(form, 'palefrenier');
   const showPin = form.role !== 'marechal';
-  const showGrid = form.role === 'cavalier' || form.role === 'lad';
-  const showColor = form.role === 'cavalier' || form.role === 'lad';
+  const riderGrids = hasRiderRole ? tarifGrids.filter((g) => g.role === form.role) : [];
+  const palefrenierGrids = hasPalefrenierRole ? tarifGrids.filter((g) => g.role === 'palefrenier') : [];
+  const selectedPalefrenierGrid = palefrenierGrids.find((g) => g.id === employeeTarifGridId(form, 'palefrenier'));
+  const showColor = hasRiderRole;
 
   return (
     <Modal open onClose={onClose} title={employee ? 'Modifier le membre' : 'Nouveau membre'} size="lg"
-      footer={<div className="flex gap-3 justify-end"><button className="btn-outline" onClick={onClose}>Annuler</button><button className="btn-primary" disabled={!form.firstName || !form.lastName} onClick={() => onSave(form)}><Save size={15} /> Enregistrer</button></div>}
+      footer={<div className="flex gap-3 justify-end"><button className="btn-outline" onClick={onClose}>Annuler</button><button className="btn-primary" disabled={!form.firstName || !form.lastName} onClick={() => onSave({ ...form, roles: [...new Set([form.role, ...(form.roles ?? [])])] })}><Save size={15} /> Enregistrer</button></div>}
     >
       <div className="space-y-4">
         <div className="grid sm:grid-cols-2 gap-4">
           <div><label className="label">Prénom *</label><input className="input" value={form.firstName} onChange={(e) => set('firstName', e.target.value)} /></div>
           <div><label className="label">Nom *</label><input className="input" value={form.lastName} onChange={(e) => set('lastName', e.target.value)} /></div>
           <div><label className="label">Téléphone</label><input className="input" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="+33 6 ..." /></div>
-          <div><label className="label">Rôle</label><select className="input" value={form.role} onChange={(e) => set('role', e.target.value as EmployeeRole)}>{roles.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}</select></div>
+          <div><label className="label">Rôle principal</label><select className="input" value={form.role} onChange={(e) => setRole(e.target.value as EmployeeRole)}>{roles.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}</select></div>
           {showPin && <div><label className="label">Code PIN (4 chiffres)</label><input className="input tracking-[0.4em] text-center" maxLength={4} value={form.pin ?? ''} onChange={(e) => set('pin', e.target.value.replace(/\D/g, ''))} placeholder="••••" inputMode="numeric" /></div>}
         </div>
+
+        {hasRiderRole && (
+          <label className="flex items-center gap-2 text-sm text-stable-700">
+            <input type="checkbox" checked={employeeHasRole(form, 'palefrenier')} onChange={(e) => setPalefrenierRole(e.target.checked)} />
+            Cette personne est aussi palefrenier
+          </label>
+        )}
 
         {showColor && (
           <div>
@@ -213,28 +264,42 @@ function EmployeeForm({ employee, tarifGrids, onClose, onSave }: { employee: Emp
           </div>
         )}
 
-        {showGrid && (
+        {showColor && (
           <div className="rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
             Les volumes (lots, longes, natation) sont calculés automatiquement à partir du planning d'entraînement.
           </div>
         )}
 
-        {showPricing && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div><label className="label">Nettoyage box (€)</label><input type="number" step="0.5" className="input" value={form.pricing?.nettoyage ?? 0} onChange={(e) => setPrice('nettoyage', Number(e.target.value))} /></div>
-            <div><label className="label">Vidage box (€)</label><input type="number" step="0.5" className="input" value={form.pricing?.vidage ?? 0} onChange={(e) => setPrice('vidage', Number(e.target.value))} /></div>
-            <div><label className="label">Nourriture (€)</label><input type="number" step="0.5" className="input" value={form.pricing?.nourriture ?? 0} onChange={(e) => setPrice('nourriture', Number(e.target.value))} /></div>
-            <div><label className="label">Soin particulier (€)</label><input type="number" step="0.5" className="input" value={form.pricing?.soinParticulier ?? 0} onChange={(e) => setPrice('soinParticulier', Number(e.target.value))} /></div>
+        {hasRiderRole && riderGrids.length > 0 && (
+          <div>
+            <label className="label">Grille tarifaire {roleLabel(form.role)}</label>
+            <select className="input" value={employeeTarifGridId(form, form.role) ?? ''} onChange={(e) => setGrid(form.role, e.target.value)}>
+              <option value="">— Tarif personnalisé —</option>
+              {riderGrids.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
           </div>
         )}
 
-        {showGrid && tarifGrids.filter((g) => g.role === form.role).length > 0 && (
-          <div>
-            <label className="label">Grille tarifaire</label>
-            <select className="input" value={form.tarifGridId ?? ''} onChange={(e) => set('tarifGridId', e.target.value || undefined)}>
-              <option value="">— Tarif personnalisé —</option>
-              {tarifGrids.filter((g) => g.role === form.role).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-            </select>
+        {hasPalefrenierRole && (
+          <div className="space-y-3">
+            {palefrenierGrids.length > 0 && (
+              <div>
+                <label className="label">Grille tarifaire Palefrenier</label>
+                <select className="input" value={employeeTarifGridId(form, 'palefrenier') ?? ''} onChange={(e) => setGrid('palefrenier', e.target.value)}>
+                  <option value="">— Tarif personnalisé —</option>
+                  {palefrenierGrids.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                </select>
+              </div>
+            )}
+            {!selectedPalefrenierGrid && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div><label className="label">Nettoyage box (€)</label><input type="number" step="0.5" className="input" value={form.pricing?.nettoyage ?? 0} onChange={(e) => setPrice('nettoyage', Number(e.target.value))} /></div>
+                <div><label className="label">Vidage box (€)</label><input type="number" step="0.5" className="input" value={form.pricing?.vidage ?? 0} onChange={(e) => setPrice('vidage', Number(e.target.value))} /></div>
+                <div><label className="label">Nourriture (€)</label><input type="number" step="0.5" className="input" value={form.pricing?.nourriture ?? 0} onChange={(e) => setPrice('nourriture', Number(e.target.value))} /></div>
+                <div><label className="label">Soin particulier (€)</label><input type="number" step="0.5" className="input" value={form.pricing?.soinParticulier ?? 0} onChange={(e) => setPrice('soinParticulier', Number(e.target.value))} /></div>
+              </div>
+            )}
+            {selectedPalefrenierGrid && <p className="text-xs text-stable-500">La grille sélectionnée s'applique au nettoyage, au vidage, à la nourriture et aux douches. Le tarif du soin particulier reste personnalisé.</p>}
           </div>
         )}
       </div>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { User, WeekSchedule } from './types';
+import type { User } from './types';
 import { supabase } from './supabaseClient';
 
 // Convert DB row (snake_case) -> app entity (camelCase). Keys not in mapping pass through.
@@ -20,8 +20,8 @@ const TABLES: Record<string, TableConfig> = {
   },
   employees: {
     table: 'employees',
-    columnMap: { user_id: 'userId', first_name: 'firstName', last_name: 'lastName', tarif_grid_id: 'tarifGridId' },
-    jsonbFields: { pricing: 'jsonObject', advances: 'jsonArray' },
+    columnMap: { user_id: 'userId', first_name: 'firstName', last_name: 'lastName', tarif_grid_id: 'tarifGridId', tarif_grid_ids: 'tarifGridIds' },
+    jsonbFields: { pricing: 'jsonObject', advances: 'jsonArray', roles: 'jsonArray', tarifGridIds: 'jsonObject' },
   },
   trainings: {
     table: 'trainings',
@@ -113,45 +113,71 @@ function entityToRow(config: TableConfig, entity: Record<string, unknown>): Reco
   return out;
 }
 
+function reportPersistenceError(collection: string, error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`${collection} persistence:`, message);
+  window.dispatchEvent(new CustomEvent('zarkava:persistence-error', {
+    detail: { collection, message },
+  }));
+}
+
 export function usePersistentCollection<T extends { id: string }>(
   key: keyof typeof TABLES,
   user: User | null,
   demoData: T[],
 ): [T[], React.Dispatch<React.SetStateAction<T[]>>, () => Promise<void>] {
   const [items, setItems] = useState<T[]>(demoData);
-  const [loaded, setLoaded] = useState(false);
+  const [loadedForUserId, setLoadedForUserId] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const skipNextSync = useRef(false);
+  const loadRequestRef = useRef(0);
 
   const config = TABLES[key];
+  const userId = user?.id ?? null;
+  const isDemo = !user || user.isDemo === true;
 
   const load = useCallback(async () => {
-    if (!user || user.isDemo) { setItems(demoData); setLoaded(true); return; }
-    const { data, error } = await supabase.from(config.table).select('*');
-    if (error) { setLoaded(true); return; }
-    setItems((data as Record<string, unknown>[]).map((row) => rowToEntity<T>(config, row)));
-    setLoaded(true);
-  }, [user, demoData, config]);
+    const requestId = ++loadRequestRef.current;
+    setLoadedForUserId(null);
+    if (isDemo) {
+      setItems(demoData);
+      return;
+    }
+    try {
+      const { data, error } = await supabase.from(config.table).select('*');
+      if (requestId !== loadRequestRef.current) return;
+      if (error) {
+        reportPersistenceError(key, error.message);
+        return;
+      }
+      setItems((data ?? []).map((row) => rowToEntity<T>(config, row as Record<string, unknown>)));
+      setLoadedForUserId(userId);
+    } catch (error) {
+      if (requestId === loadRequestRef.current) reportPersistenceError(key, error);
+    }
+  }, [isDemo, userId, demoData, config, key]);
 
   // Load when user changes
   useEffect(() => {
-    setLoaded(false);
     load();
   }, [load]);
 
   // Debounced upsert sync (only for live users)
   useEffect(() => {
-    if (!user || user.isDemo || !loaded) return;
-    if (skipNextSync.current) { skipNextSync.current = false; return; }
+    if (isDemo || !userId || loadedForUserId !== userId) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       const rows = items.map((it) => entityToRow(config, it as Record<string, unknown>));
+      if (rows.length === 0) return;
       // Upsert all rows (idempotent on PK)
-      const { error } = await supabase.from(config.table).upsert(rows, { onConflict: 'id' });
-      if (error) console.warn(`sync ${key}:`, error.message);
+      try {
+        const { error } = await supabase.from(config.table).upsert(rows, { onConflict: 'id' });
+        if (error) reportPersistenceError(key, error.message);
+      } catch (error) {
+        reportPersistenceError(key, error);
+      }
     }, 800);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [items, user, loaded, key, config]);
+  }, [items, userId, isDemo, loadedForUserId, key, config]);
 
   return [items, setItems, load];
 }

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { LogOut, Check, StickyNote, ClipboardList, Droplets, Sparkles, HeartPulse, AlertTriangle, Sun, Moon, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import { useApp } from '@/store';
 import type { Soin, SoinType } from '@/types';
-import { todayISO, tomorrowISO, fmtDate, fmtDateLong, roleLabel, addDays } from '@/lib';
+import { employeeHasRole, employeeRoleLabels, todayISO, tomorrowISO, fmtDate, fmtDateLong, addDays } from '@/lib';
 import { Badge, Modal } from './ui';
 
 // Work for day D is visible from day D-1 at 15:00. So before 15:00 the active day is today;
@@ -18,6 +18,8 @@ export function FieldView() {
   const emp = employeeId ? getEmployee(employeeId) : null;
 
   if (!emp) return null;
+  const hasRiderRole = employeeHasRole(emp, 'cavalier') || employeeHasRole(emp, 'lad');
+  const hasPalefrenierRole = employeeHasRole(emp, 'palefrenier');
 
   return (
     <div className="min-h-screen bg-stable-50">
@@ -27,7 +29,7 @@ export function FieldView() {
             <div className="w-10 h-10 rounded-xl bg-gold-400 text-stable-950 flex items-center justify-center font-display font-bold">{emp.firstName[0]}{emp.lastName[0]}</div>
             <div>
               <h1 className="font-display font-bold text-lg leading-tight">{emp.firstName} {emp.lastName}</h1>
-              <p className="text-xs text-stable-300 capitalize">{roleLabel(emp.role)} · {fmtDateLong(activeWorkDate())}</p>
+              <p className="text-xs text-stable-300 capitalize">{employeeRoleLabels(emp)} · {fmtDateLong(activeWorkDate())}</p>
             </div>
           </div>
           <button className="p-2 rounded-lg text-stable-300 hover:bg-stable-800" onClick={() => setSession(null)} title="Déconnexion"><LogOut size={18} /></button>
@@ -35,8 +37,27 @@ export function FieldView() {
       </header>
 
       <main className="max-w-2xl mx-auto p-4 lg:p-6">
-        {emp.role === 'cavalier' || emp.role === 'lad' ? <CavalierView riderId={emp.id} /> : emp.role === 'palefrenier' ? <PalefrenierView palefrenierId={emp.id} /> : <UnknownRole />}
+        {hasRiderRole && hasPalefrenierRole
+          ? <DualRoleViews employeeId={emp.id} />
+          : hasRiderRole
+            ? <CavalierView riderId={emp.id} />
+            : hasPalefrenierRole
+              ? <PalefrenierView palefrenierId={emp.id} />
+              : <UnknownRole />}
       </main>
+    </div>
+  );
+}
+
+function DualRoleViews({ employeeId }: { employeeId: string }) {
+  const [activeRole, setActiveRole] = useState<'cavalier' | 'palefrenier'>('cavalier');
+  return (
+    <div className="space-y-4">
+      <div className="flex bg-stable-100 rounded-xl p-1">
+        <button onClick={() => setActiveRole('cavalier')} className={`flex-1 rounded-lg py-2.5 text-sm font-semibold ${activeRole === 'cavalier' ? 'bg-white text-stable-900 shadow-sm' : 'text-stable-500'}`}>Cavalier</button>
+        <button onClick={() => setActiveRole('palefrenier')} className={`flex-1 rounded-lg py-2.5 text-sm font-semibold ${activeRole === 'palefrenier' ? 'bg-white text-stable-900 shadow-sm' : 'text-stable-500'}`}>Palefrenier</button>
+      </div>
+      {activeRole === 'cavalier' ? <CavalierView riderId={employeeId} /> : <PalefrenierView palefrenierId={employeeId} />}
     </div>
   );
 }

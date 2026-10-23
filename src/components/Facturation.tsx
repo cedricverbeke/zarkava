@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Receipt, Download, Plus, TrendingUp, Wallet, FileText, Check, Trash2, Info, Droplets } from 'lucide-react';
 import { useApp } from '@/store';
 import type { Employee, TrainingCategory } from '@/types';
-import { roleLabel, fmtDate, todayISO, addDays } from '@/lib';
+import { employeeHasRole, employeeRoleLabels, employeeTarifGridId, fmtDate, todayISO, addDays } from '@/lib';
 import { generatePdf } from '@/pdfUtils';
 import { Confirm, EmptyState, Modal } from './ui';
 
@@ -25,13 +25,17 @@ export function FacturationPage() {
 
   const rows = useMemo(() => {
     return employees
-      .filter((e) => e.role === 'cavalier' || e.role === 'lad' || e.role === 'palefrenier')
+      .filter((e) => employeeHasRole(e, 'cavalier') || employeeHasRole(e, 'lad') || employeeHasRole(e, 'palefrenier'))
       .map((emp) => {
-        const grid = tarifGrids.find((g) => g.id === emp.tarifGridId);
+        const riderRole = (['cavalier', 'lad'] as const).find((role) => employeeHasRole(emp, role));
+        const riderGrid = riderRole && tarifGrids.find((g) => g.id === employeeTarifGridId(emp, riderRole) && g.role === riderRole);
+        const palefrenierGrid = employeeHasRole(emp, 'palefrenier')
+          ? tarifGrids.find((g) => g.id === employeeTarifGridId(emp, 'palefrenier') && g.role === 'palefrenier')
+          : undefined;
         const detail: DetailRow[] = [];
         let total = 0;
 
-if (emp.role === 'cavalier' || emp.role === 'lad') {
+if (riderRole) {
   // Count from planning entries done in the period, grouped by training category.
   const periodEntries = planning.filter((p) => p.riderId === emp.id && p.date >= start && p.date <= end && p.done);
   const counts: Record<TrainingCategory, number> = { lot: 0, longe: 0, natation: 0, paddock: 0, autre: 0 };
@@ -40,8 +44,8 @@ if (emp.role === 'cavalier' || emp.role === 'lad') {
     const cat = tr?.category ?? 'lot';
     counts[cat] += 1;
   });
-  const r = grid?.rates ?? { lot: 0, longe: 0, natation: 0, paddock: 0, douche: 0, nettoyage: 0, vidage: 0, nourriture: 0 };
-  const tr = grid?.trainingRates ?? {};
+  const r = riderGrid?.rates ?? { lot: 0, longe: 0, natation: 0, paddock: 0, douche: 0, nettoyage: 0, vidage: 0, nourriture: 0 };
+  const tr = riderGrid?.trainingRates ?? {};
   
   const perTrainingTotals = new Map<string, { name: string; qty: number; unit: number }>();
   const categoryTotals: Record<string, { qty: number; unit: number }> = {};
@@ -82,23 +86,21 @@ if (emp.role === 'cavalier' || emp.role === 'lad') {
     }
   });
 
-  // Douches assigned to this rider
-  const periodDouches = douches.filter((d) => d.assignedTo === emp.id && d.date >= start && d.date <= end && d.done);
-  if (periodDouches.length > 0 && r.douche > 0) {
-    detail.push({ label: 'Douches', qty: periodDouches.length, unit: r.douche, total: periodDouches.length * r.douche });
-    total += periodDouches.length * r.douche;
-          }
-        } else if (emp.role === 'palefrenier') {
+        }
+        if (employeeHasRole(emp, 'palefrenier')) {
           const periodSoins = soins.filter((s) => s.assignedTo === emp.id && s.date >= start && s.date <= end && s.done);
           const nettoyages = periodSoins.filter((s) => s.type === 'nettoyage_box').length;
           const vidages = periodSoins.filter((s) => s.type === 'vidage_box').length;
           const nourritureDays = new Set(periodSoins.filter((s) => s.type === 'nourriture').map((s) => s.date)).size;
           const particulier = periodSoins.filter((s) => s.type === 'soin_particulier');
-          const r = emp.pricing ?? { nettoyage: 0, vidage: 0, nourriture: 0, soinParticulier: 0 };
+          const pricing = emp.pricing ?? { nettoyage: 0, vidage: 0, nourriture: 0, soinParticulier: 0 };
+          const nettoyageRate = palefrenierGrid?.rates.nettoyage ?? pricing.nettoyage;
+          const vidageRate = palefrenierGrid?.rates.vidage ?? pricing.vidage;
+          const nourritureRate = palefrenierGrid?.rates.nourriture ?? pricing.nourriture;
           const items: [string, number, number][] = [
-            ['Nettoyages de box', nettoyages, r.nettoyage],
-            ['Vidages complets', vidages, r.vidage],
-            ['Nourriture (forfait/jour)', nourritureDays, r.nourriture],
+            ['Nettoyages de box', nettoyages, nettoyageRate],
+            ['Vidages complets', vidages, vidageRate],
+            ['Nourriture (forfait/jour)', nourritureDays, nourritureRate],
           ];
           items.filter(([, qty, unit]) => qty > 0 && unit > 0).forEach(([label, qty, unit]) => {
             const t = qty * unit;
@@ -107,17 +109,18 @@ if (emp.role === 'cavalier' || emp.role === 'lad') {
           });
           // Soin particulier with custom price
           particulier.forEach((s) => {
-            const unit = s.price ?? r.soinParticulier ?? 15;
+            const unit = s.price ?? pricing.soinParticulier ?? 15;
             detail.push({ label: 'Soin particulier', qty: 1, unit, total: unit });
             total += unit;
           });
-          // Douches assigned to this palefrenier
-          const periodDouches = douches.filter((d) => d.assignedTo === emp.id && d.date >= start && d.date <= end && d.done);
-          if (periodDouches.length > 0) {
-            const doucheRate = tarifGrids.find((g) => g.role === 'palefrenier')?.rates.douche ?? 5;
-            detail.push({ label: 'Douches', qty: periodDouches.length, unit: doucheRate, total: periodDouches.length * doucheRate });
-            total += periodDouches.length * doucheRate;
-          }
+        }
+        const periodDouches = douches.filter((d) => d.assignedTo === emp.id && d.date >= start && d.date <= end && d.done);
+        const doucheRate = riderRole
+          ? riderGrid?.rates.douche ?? (employeeHasRole(emp, 'palefrenier') ? palefrenierGrid?.rates.douche ?? 5 : 0)
+          : palefrenierGrid?.rates.douche ?? 5;
+        if (periodDouches.length > 0 && doucheRate > 0) {
+          detail.push({ label: 'Douches', qty: periodDouches.length, unit: doucheRate, total: periodDouches.length * doucheRate });
+          total += periodDouches.length * doucheRate;
         }
 
         const advances = emp.advances ?? [];
@@ -135,8 +138,8 @@ if (emp.role === 'cavalier' || emp.role === 'lad') {
   function exportCSV() {
     const lines = ['Employé,Rôle,Acte,Quantité,Tarif unitaire,Total'];
     rows.forEach((r) => {
-      if (r.detail.length === 0) lines.push(`${r.emp.firstName} ${r.emp.lastName},${roleLabel(r.emp.role)},—,0,0,0`);
-      r.detail.forEach((d) => lines.push(`${r.emp.firstName} ${r.emp.lastName},${roleLabel(r.emp.role)},"${d.label}",${d.qty},${d.unit},${d.total}`));
+      if (r.detail.length === 0) lines.push(`${r.emp.firstName} ${r.emp.lastName},${employeeRoleLabels(r.emp)},—,0,0,0`);
+      r.detail.forEach((d) => lines.push(`${r.emp.firstName} ${r.emp.lastName},${employeeRoleLabels(r.emp)},"${d.label}",${d.qty},${d.unit},${d.total}`));
     });
     lines.push('', `Total brut,,,,,${grandTotal}€`, `Avances,,,,,${grandAdvances}€`, `Net à payer,,,,,${grandNet}€`);
     downloadBlob(lines.join('\n'), `facturation-${period}-${todayISO()}.csv`, 'text/csv;charset=utf-8');
@@ -148,9 +151,9 @@ if (emp.role === 'cavalier' || emp.role === 'lad') {
       table: {
         headers: ['Employé', 'Rôle', 'Acte', 'Qté', 'Prix unit.', 'Total'],
         rows: rows.flatMap((r) => {
-          const base: string[][] = r.detail.length ? r.detail.map((d) => [`${r.emp.firstName} ${r.emp.lastName}`, roleLabel(r.emp.role), d.label, String(d.qty), `${d.unit}€`, `${d.total}€`]) : [[`${r.emp.firstName} ${r.emp.lastName}`, roleLabel(r.emp.role), 'Aucune prestation', '0', '0€', '0€']];
-          r.advances.forEach((a) => base.push([`${r.emp.firstName} ${r.emp.lastName}`, roleLabel(r.emp.role), `Avance (${a.method})`, '1', '—', `-${a.amount}€`]));
-          base.push([`${r.emp.firstName} ${r.emp.lastName}`, roleLabel(r.emp.role), 'NET À PAYER', '', '', `${r.net}€`]);
+          const base: string[][] = r.detail.length ? r.detail.map((d) => [`${r.emp.firstName} ${r.emp.lastName}`, employeeRoleLabels(r.emp), d.label, String(d.qty), `${d.unit}€`, `${d.total}€`]) : [[`${r.emp.firstName} ${r.emp.lastName}`, employeeRoleLabels(r.emp), 'Aucune prestation', '0', '0€', '0€']];
+          r.advances.forEach((a) => base.push([`${r.emp.firstName} ${r.emp.lastName}`, employeeRoleLabels(r.emp), `Avance (${a.method})`, '1', '—', `-${a.amount}€`]));
+          base.push([`${r.emp.firstName} ${r.emp.lastName}`, employeeRoleLabels(r.emp), 'NET À PAYER', '', '', `${r.net}€`]);
           return base;
         }),
       },
@@ -212,7 +215,7 @@ if (emp.role === 'cavalier' || emp.role === 'lad') {
                   <div className="w-10 h-10 rounded-xl bg-stable-700 text-white flex items-center justify-center font-semibold shrink-0">{r.emp.firstName[0]}{r.emp.lastName[0]}</div>
                   <div>
                     <div className="font-semibold text-stable-900">{r.emp.firstName} {r.emp.lastName}</div>
-                    <div className="text-xs text-stable-500">{roleLabel(r.emp.role)}</div>
+                    <div className="text-xs text-stable-500">{employeeRoleLabels(r.emp)}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">

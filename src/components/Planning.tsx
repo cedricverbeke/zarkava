@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Plus, Trash2, CalendarDays, Copy, Eraser, ChevronLeft, ChevronRight, Check, X, StickyNote, FileText } from 'lucide-react';
 import { useApp } from '@/store';
 import type { PlanningEntry } from '@/types';
-import { todayISO, tomorrowISO, fmtDateLong, fmtDate, addDays, sameWeekday, lotColor } from '@/lib';
+import { employeeHasRole, todayISO, tomorrowISO, fmtDateLong, fmtDate, addDays, sameWeekday, lotColor } from '@/lib';
 import { Badge, Confirm, EmptyState, Modal } from './ui';
 import { generatePdf } from '@/pdfUtils';
 
@@ -20,7 +20,7 @@ export function PlanningPage() {
 
   const assignedHorseIds = useMemo(() => new Set(dayEntries.map((p) => p.horseId)), [dayEntries]);
   const availableHorses = horses.filter((h) => h.status === 'actif' && !assignedHorseIds.has(h.id));
-  const riders = employees.filter((e) => e.role === 'cavalier' || e.role === 'lad');
+  const riders = employees.filter((e) => employeeHasRole(e, 'cavalier') || employeeHasRole(e, 'lad'));
 
   const lastWeekDate = addDays(date, -7);
   const lastWeekEntries = planning.filter((p) => p.date === lastWeekDate);
@@ -187,18 +187,18 @@ export function PlanningPage() {
             );
           })}
 
-          {/* Add new lot button at the BOTTOM for mobile ergonomics */}
-          <div className="sticky bottom-4 z-10">
-            <button
-              className="btn-xl w-full btn-gold shadow-lg"
-              onClick={() => setAddLot(nextLot)}
-              disabled={availableHorses.length === 0}
-            >
-              <Plus size={20} /> Ajouter au lot {nextLot}
-            </button>
-          </div>
         </div>
       )}
+
+      <div className="sticky bottom-4 z-10">
+        <button
+          className="btn-xl w-full btn-gold shadow-lg"
+          onClick={() => setAddLot(nextLot)}
+          disabled={availableHorses.length === 0}
+        >
+          <Plus size={20} /> Ajouter au lot {nextLot}
+        </button>
+      </div>
 
       {/* Add entry modal */}
       {addLot !== null && (

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, CalendarDays, Check, FileText, Pencil, Trash2, AlertTriangle, Info } from 'lucide-react';
 import { useApp } from '@/store';
-import { todayISO, fmtDateLong, fmtDate, addDays } from '@/lib';
+import { employeeHasRole, todayISO, fmtDateLong, fmtDate, addDays } from '@/lib';
 import { Badge, Confirm, EmptyState, Modal } from './ui';
 import { generatePdf } from '@/pdfUtils';
 import type { Employee, PlanningEntry, Soin, Douche, SoinType } from '@/types';
@@ -219,7 +219,7 @@ export function RecapPage() {
   const grandTotal = rows.reduce((sum, r) => sum + (r.done ? r.amount : 0), 0);
 
   // Rider/soin/douche assignable employees
-  const assignableEmployees = employees.filter((e) => e.role === 'cavalier' || e.role === 'lad' || e.role === 'palefrenier');
+  const assignableEmployees = employees.filter((e) => employeeHasRole(e, 'cavalier') || employeeHasRole(e, 'lad') || employeeHasRole(e, 'palefrenier'));
   const activeHorses = horses.filter((h) => h.status === 'actif');
 
   return (

@@ -1,7 +1,7 @@
 import { LogOut, Menu, X } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useApp } from '@/store';
-import { roleLabel } from '@/lib';
+import { employeeHasRole, roleLabel } from '@/lib';
 
 export type TrainerPage =
   | 'dashboard'
@@ -52,8 +52,8 @@ export function TrainerShell({
 
   const activeLabel = nav.find((n) => n.id === page)?.label ?? '';
   const user = session?.kind === 'trainer' ? session.user : null;
-  const cavaliers = employees.filter((e) => e.role === 'cavalier' || e.role === 'lad').length;
-  const palefreniers = employees.filter((e) => e.role === 'palefrenier').length;
+  const cavaliers = employees.filter((e) => employeeHasRole(e, 'cavalier') || employeeHasRole(e, 'lad')).length;
+  const palefreniers = employees.filter((e) => employeeHasRole(e, 'palefrenier')).length;
 
   return (
     <div className="min-h-screen bg-stable-50 flex">
