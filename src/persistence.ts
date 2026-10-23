@@ -100,10 +100,11 @@ function rowToEntity<T>(config: TableConfig, row: Record<string, unknown>): T {
 }
 
 function entityToRow(config: TableConfig, entity: Record<string, unknown>): Record<string, unknown> {
+  const inv = invert(config.columnMap); // Utilise l'équivalent inversé (app -> db)
   const out: Record<string, unknown> = {};
   for (const [appKey, value] of Object.entries(entity)) {
     if (appKey === 'userId') continue; // user_id is set by DB default
-    const dbKey = config.columnMap[appKey] ?? appKey;
+    const dbKey = inv[appKey] ?? appKey; // Correction : on cherche dans 'inv'
     if (config.jsonbFields[appKey] && typeof value !== 'string') {
       out[dbKey] = JSON.stringify(value);
     } else {
