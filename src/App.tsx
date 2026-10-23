@@ -48,11 +48,11 @@ function Router() {
 }
 
 function PersistenceNotice() {
-  const [error, setError] = useState<{ collection: string; message: string } | null>(null);
+  const [error, setError] = useState<{ collection: string; operation: 'read' | 'write'; message: string } | null>(null);
 
   useEffect(() => {
     const onPersistenceError = (event: Event) => {
-      const detail = (event as CustomEvent<{ collection: string; message: string }>).detail;
+      const detail = (event as CustomEvent<{ collection: string; operation: 'read' | 'write'; message: string }>).detail;
       setError(detail);
     };
     window.addEventListener('zarkava:persistence-error', onPersistenceError);
@@ -61,10 +61,11 @@ function PersistenceNotice() {
 
   if (!error) return null;
   const collection = error.collection === 'horses' ? 'chevaux' : error.collection;
+  const action = error.operation === 'read' ? 'chargement' : 'enregistrement';
 
   return (
     <div role="alert" className="fixed bottom-4 left-4 right-4 z-[100] mx-auto max-w-2xl rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-900 shadow-lg">
-      <div className="font-semibold">La synchronisation Supabase a échoué ({collection}).</div>
+      <div className="font-semibold">Le {action} des données Supabase a échoué ({collection}).</div>
       <div className="mt-1 break-words">{error.message}</div>
       <button className="mt-2 font-semibold underline" onClick={() => setError(null)}>Fermer</button>
     </div>

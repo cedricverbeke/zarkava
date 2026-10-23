@@ -113,11 +113,11 @@ function entityToRow(config: TableConfig, entity: Record<string, unknown>): Reco
   return out;
 }
 
-function reportPersistenceError(collection: string, error: unknown) {
+function reportPersistenceError(collection: string, operation: 'read' | 'write', error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   console.error(`${collection} persistence:`, message);
   window.dispatchEvent(new CustomEvent('zarkava:persistence-error', {
-    detail: { collection, message },
+    detail: { collection, operation, message },
   }));
 }
 
@@ -142,17 +142,18 @@ export function usePersistentCollection<T extends { id: string }>(
       setItems(demoData);
       return;
     }
+    setItems([]);
     try {
       const { data, error } = await supabase.from(config.table).select('*');
       if (requestId !== loadRequestRef.current) return;
       if (error) {
-        reportPersistenceError(key, error.message);
+        reportPersistenceError(key, 'read', error.message);
         return;
       }
       setItems((data ?? []).map((row) => rowToEntity<T>(config, row as Record<string, unknown>)));
       setLoadedForUserId(userId);
     } catch (error) {
-      if (requestId === loadRequestRef.current) reportPersistenceError(key, error);
+      if (requestId === loadRequestRef.current) reportPersistenceError(key, 'read', error);
     }
   }, [isDemo, userId, demoData, config, key]);
 
@@ -171,9 +172,9 @@ export function usePersistentCollection<T extends { id: string }>(
       // Upsert all rows (idempotent on PK)
       try {
         const { error } = await supabase.from(config.table).upsert(rows, { onConflict: 'id' });
-        if (error) reportPersistenceError(key, error.message);
+        if (error) reportPersistenceError(key, 'write', error.message);
       } catch (error) {
-        reportPersistenceError(key, error);
+        reportPersistenceError(key, 'write', error);
       }
     }, 800);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
