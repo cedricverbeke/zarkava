@@ -2,8 +2,9 @@
 # Requires these repo secrets (Settings → Secrets and variables → Actions):
 #   NETLIFY_AUTH_TOKEN     — personal access token from https://app.netlify.com/user/applications
 #   NETLIFY_SITE_ID        — site API ID from Netlify site settings → General → Site details
-# Add the same env vars to Netlify (Site settings → Environment variables):
-#   VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+# This workflow builds the app itself, so these must also be GitHub Actions secrets:
+#   NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+# Configure them in Netlify too only if Netlify also builds/deploys the site directly.
 
 name: Build and deploy to Netlify
 
@@ -33,21 +34,21 @@ jobs:
 
       - name: Validate deployment secrets
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
         run: |
-          test -n "$VITE_SUPABASE_URL" || { echo "::error::Missing GitHub Actions secret VITE_SUPABASE_URL"; exit 1; }
-          test -n "$VITE_SUPABASE_ANON_KEY" || { echo "::error::Missing GitHub Actions secret VITE_SUPABASE_ANON_KEY"; exit 1; }
+          test -n "$NEXT_PUBLIC_SUPABASE_URL" || { echo "::error::Missing GitHub Actions secret NEXT_PUBLIC_SUPABASE_URL"; exit 1; }
+          test -n "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" || { echo "::error::Missing GitHub Actions secret NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"; exit 1; }
           test -n "$NETLIFY_AUTH_TOKEN" || { echo "::error::Missing GitHub Actions secret NETLIFY_AUTH_TOKEN"; exit 1; }
           test -n "$NETLIFY_SITE_ID" || { echo "::error::Missing GitHub Actions secret NETLIFY_SITE_ID"; exit 1; }
 
       - name: Build
         run: npm run build
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
 
       - name: Deploy to Netlify
         uses: nwtgck/actions-netlify@v3.0
