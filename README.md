@@ -56,8 +56,8 @@ Dans **Site settings → Environment variables**, ajouter :
 
 | Variable | Valeur |
 |----------|--------|
-| `NEXT_PUBLIC_SUPABASE_URL` | l'URL Supabase |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | la clé publishable Supabase |
+| `VITE_SUPABASE_URL` | l'URL Supabase |
+| `VITE_SUPABASE_ANON_KEY` | la clé anon Supabase |
 
 Ces deux variables sont nécessaires au frontend.
 Après les avoir ajoutées ou modifiées, déclenchez un nouveau déploiement : Vite
@@ -88,8 +88,8 @@ pendant ce build. Ajouter ces quatre secrets dans le repo GitHub
 
 - `NETLIFY_AUTH_TOKEN` — token perso : https://app.netlify.com/user/applications
 - `NETLIFY_SITE_ID` — API ID du site : Netlify → Site settings → General → Site details
-- `NEXT_PUBLIC_SUPABASE_URL` — URL du projet Supabase
-- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — clé publishable du même projet Supabase
+- `VITE_SUPABASE_URL` — URL du projet Supabase
+- `VITE_SUPABASE_ANON_KEY` — clé anon du même projet Supabase
 
 Si Netlify déploie directement depuis GitHub, configurez les variables Supabase
 dans Netlify et désactivez ce workflow dans GitHub Actions pour éviter deux
