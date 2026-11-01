@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Fingerprint, Lock, Phone, ShieldCheck, User as UserIcon, Eye, EyeOff, Sparkles, MessageCircle, UserPlus, LogIn } from 'lucide-react';
+import { Lock, Phone, ShieldCheck, User as UserIcon, Eye, EyeOff, Sparkles, MessageCircle, UserPlus, LogIn } from 'lucide-react';
 import { useApp, trainerUser, supabase } from '@/store';
 import type { Session } from '@/types';
 
 type Tab = 'signin' | 'signup' | 'field' | 'farrier';
 
 export function LoginScreen() {
-  const { setSession, employees, ferrageOrders, biometricEnabled, setBiometricEnabled, signIn, signUp, authLoading } = useApp();
+  const { setSession, employees, ferrageOrders, signIn, signUp, authLoading, authError } = useApp();
   const [tab, setTab] = useState<Tab>('signin');
 
   // signin
@@ -49,14 +49,6 @@ export function LoginScreen() {
   function loginDemo() {
     setErr('');
     setSession({ kind: 'trainer', user: { ...trainerUser, isDemo: true } });
-  }
-
-  function loginBiometric() {
-    if (biometricEnabled) {
-      setSession({ kind: 'trainer', user: { ...trainerUser, isDemo: true } });
-    } else {
-      setErr('Activez d\'abord la biométrie depuis votre profil après connexion.');
-    }
   }
 
   function loginField() {
@@ -122,7 +114,7 @@ export function LoginScreen() {
           </p>
           <div className="mt-8 grid grid-cols-2 gap-3 text-sm">
             <Feature icon={<ShieldCheck size={16} />} text="Compte sécurisé" />
-            <Feature icon={<Fingerprint size={16} />} text="Connexion biométrique" />
+            <Feature icon={<Lock size={16} />} text="Données synchronisées" />
             <Feature icon={<MessageCircle size={16} />} text="Bon de ferrage WhatsApp" />
             <Feature icon={<Sparkles size={16} />} text="Vue terrain optimisée gants" />
           </div>
@@ -141,6 +133,7 @@ export function LoginScreen() {
           </div>
 
           {err && <div className="mb-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{err}</div>}
+          {!err && authError && <div role="alert" className="mb-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">Erreur de connexion à Supabase : {authError}</div>}
 
           {tab === 'signin' && (
             <div className="space-y-4 animate-fade-in">
@@ -162,6 +155,9 @@ export function LoginScreen() {
                 </div>
               </div>
               <button className="btn-primary w-full btn-lg" onClick={handleSignIn} disabled={busy}>{busy ? 'Connexion…' : 'Se connecter'}</button>
+              <p className="text-center text-xs text-stable-500">
+                Pour retrouver vos données sur un autre appareil, connectez-vous avec la même adresse e-mail et le même mot de passe.
+              </p>
 
               <div className="flex items-center gap-3 my-2">
                 <div className="flex-1 h-px bg-stable-200" />
@@ -169,9 +165,6 @@ export function LoginScreen() {
                 <div className="flex-1 h-px bg-stable-200" />
               </div>
 
-              <button className="btn-outline w-full" onClick={loginBiometric} disabled={!biometricEnabled}>
-                <Fingerprint size={18} /> {biometricEnabled ? 'Connexion Face ID / Touch ID' : 'Biométrie non activée'}
-              </button>
               <button className="btn-ghost w-full text-sm" onClick={loginDemo}>
                 Essayer la démo (données fictives, non sauvegardées)
               </button>

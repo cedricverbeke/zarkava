@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Fingerprint, Lock, User as UserIcon, Mail, Check, LogOut, Shield, KeyRound, Info, Camera, Image as ImageIcon } from 'lucide-react';
+import { Lock, User as UserIcon, Mail, Check, LogOut, Shield, KeyRound, Info, Camera, Image as ImageIcon } from 'lucide-react';
 import { useApp, trainerUser } from '@/store';
 import { compressImage } from '@/imageUtils';
 
 export function ProfilePage() {
-  const { session, setSession, biometricEnabled, setBiometricEnabled, authMode, authUser, signOut, updateLogo } = useApp();
+  const { session, setSession, authMode, authUser, signOut, updateLogo } = useApp();
   const user = session?.kind === 'trainer' ? session.user : { ...trainerUser, isDemo: true };
   const isDemo = user.isDemo === true || authMode === 'demo';
   const [name, setName] = useState(user.name);
@@ -13,7 +13,6 @@ export function ProfilePage() {
   const [newPwd, setNewPwd] = useState('');
   const [confirmPwd, setConfirmPwd] = useState('');
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [biometricSupported] = useState(() => typeof window !== 'undefined' && 'PublicKeyCredential' in window);
   const [logoLoading, setLogoLoading] = useState(false);
 
   function changePassword() {
@@ -21,15 +20,6 @@ export function ProfilePage() {
     if (newPwd !== confirmPwd) { setMsg({ type: 'error', text: 'Les mots de passe ne correspondent pas.' }); return; }
     setMsg({ type: 'success', text: 'Mot de passe modifié avec succès.' });
     setCurrentPwd(''); setNewPwd(''); setConfirmPwd('');
-  }
-
-  async function enableBiometric() {
-    if (!biometricSupported) {
-      setMsg({ type: 'error', text: 'Votre navigateur ne supporte pas WebAuthn / Passkeys.' });
-      return;
-    }
-    setBiometricEnabled(true);
-    setMsg({ type: 'success', text: 'Biométrie activée. Vous pouvez vous connecter via Face ID / Touch ID.' });
   }
 
   async function handleSignOut() {
@@ -128,28 +118,10 @@ export function ProfilePage() {
         </div>
       </div>
 
-      {/* Biometric */}
+      {/* Cross-device access */}
       <div className="card p-6">
-        <h3 className="font-display font-bold text-stable-900 mb-4 flex items-center gap-2"><Fingerprint size={18} /> Authentification biométrique</h3>
-        <p className="text-sm text-stable-600 mb-4">Activez Face ID / Touch ID / Passkeys pour vous connecter instantanément sur smartphone sans ressaisir votre mot de passe.</p>
-        {biometricSupported ? (
-          <div className="flex items-center justify-between rounded-xl bg-stable-50 px-4 py-3">
-            <div className="flex items-center gap-3">
-              <Fingerprint size={20} className={biometricEnabled ? 'text-emerald-600' : 'text-stable-400'} />
-              <div>
-                <div className="font-semibold text-stable-900 text-sm">{biometricEnabled ? 'Biométrie activée' : 'Biométrie désactivée'}</div>
-                <div className="text-xs text-stable-500">WebAuthn supporté par ce navigateur</div>
-              </div>
-            </div>
-            {biometricEnabled ? (
-              <button className="btn-outline text-red-600 border-red-200 hover:bg-red-50" onClick={() => { setBiometricEnabled(false); setMsg({ type: 'success', text: 'Biométrie désactivée.' }); }}>Désactiver</button>
-            ) : (
-              <button className="btn-gold" onClick={enableBiometric}><Fingerprint size={15} /> Activer</button>
-            )}
-          </div>
-        ) : (
-          <div className="rounded-xl bg-stable-50 px-4 py-3 text-sm text-stable-500">Votre navigateur ne supporte pas WebAuthn. Utilisez Safari, Chrome ou Edge récent.</div>
-        )}
+        <h3 className="font-display font-bold text-stable-900 mb-2 flex items-center gap-2"><KeyRound size={18} /> Connexion sur vos appareils</h3>
+        <p className="text-sm text-stable-600">Connectez-vous avec la même adresse e-mail et le même mot de passe pour retrouver vos données. La connexion biométrique n'est pas encore disponible.</p>
       </div>
 
       <div className="flex justify-end">

@@ -67,7 +67,7 @@ const TABLES: Record<string, TableConfig> = {
     table: 'week_schedules',
     columnMap: { user_id: 'userId', week_a_id: 'weekAId', week_b_id: 'weekBId', week_c_id: 'weekCId', week_d_id: 'weekDId', start_date: 'startDate', end_date: 'endDate' },
     jsonbFields: {},
-  }, // 'active' column shares the same name in DB and app, passes through automatically
+  },
 };
 
 function invert(map: ColumnMap): ColumnMap {
@@ -80,11 +80,10 @@ function rowToEntity<T>(config: TableConfig, row: Record<string, unknown>): T {
   const inv = invert(config.columnMap);
   const out: Record<string, unknown> = {};
   for (const [dbKey, value] of Object.entries(row)) {
-    if (dbKey === 'user_id') continue; // don't expose user_id in app entities
+    if (dbKey === 'user_id') continue;
     const appKey = inv[dbKey] ?? dbKey;
     out[appKey] = value;
   }
-  // Parse jsonb fields (they come as strings from some supabase versions, or already parsed)
   for (const [appField, kind] of Object.entries(config.jsonbFields)) {
     if (out[appField] !== undefined && typeof out[appField] === 'string') {
       try { out[appField] = JSON.parse(out[appField] as string); } catch { /* leave as-is */ }
@@ -99,17 +98,20 @@ function rowToEntity<T>(config: TableConfig, row: Record<string, unknown>): T {
   return out as T;
 }
 
-function entityToRow(config: TableConfig, entity: Record<string, unknown>): Record<string, unknown> {
-  const inv = invert(config.columnMap); // Utilise l'équivalent inversé (app -> db)
+function entityToRow(config: TableConfig, entity: Record<string, unknown>, userId?: string | null): Record<string, unknown> {
+  const inv = invert(config.columnMap);
   const out: Record<string, unknown> = {};
   for (const [appKey, value] of Object.entries(entity)) {
-    if (appKey === 'userId') continue; // user_id is set by DB default
-    const dbKey = inv[appKey] ?? appKey; // Correction : on cherche dans 'inv'
+    if (appKey === 'userId') continue;
+    const dbKey = inv[appKey] ?? appKey;
     if (config.jsonbFields[appKey] && typeof value !== 'string') {
       out[dbKey] = JSON.stringify(value);
     } else {
       out[dbKey] = value;
     }
+  }
+  if (userId) {
+    out['user_id'] = userId;
   }
   return out;
 }
@@ -145,7 +147,10 @@ export function usePersistentCollection<T extends { id: string }>(
     }
     setItems([]);
     try {
-      const { data, error } = await supabase.from(config.table).select('*');
+      const { data, error } = await supabase
+        .from(config.table)
+        .select('*')
+        .eq('user_id', userId);
       if (requestId !== loadRequestRef.current) return;
       if (error) {
         reportPersistenceError(key, 'read', error.message);
@@ -158,19 +163,16 @@ export function usePersistentCollection<T extends { id: string }>(
     }
   }, [isDemo, userId, demoData, config, key]);
 
-  // Load when user changes
   useEffect(() => {
     load();
   }, [load]);
 
-  // Debounced upsert sync (only for live users)
   useEffect(() => {
     if (isDemo || !userId || loadedForUserId !== userId) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
-      const rows = items.map((it) => entityToRow(config, it as Record<string, unknown>));
+      const rows = items.map((it) => entityToRow(config, it as Record<string, unknown>, userId));
       if (rows.length === 0) return;
-      // Upsert all rows (idempotent on PK)
       try {
         const { error } = await supabase.from(config.table).upsert(rows, { onConflict: 'id' });
         if (error) reportPersistenceError(key, 'write', error.message);
@@ -183,8 +185,6 @@ export function usePersistentCollection<T extends { id: string }>(
 
   return [items, setItems, load];
 }
-
-// --- Ferrage orders: token-based access, separate handling ---
 
 export function ferrageRowToOrder(row: Record<string, unknown>): import('./types').FerrageOrder {
   let horses = row.horses as unknown;

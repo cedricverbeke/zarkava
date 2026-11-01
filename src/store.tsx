@@ -48,13 +48,12 @@ interface AppState {
   setSession: (s: Session | null) => void;
   authMode: AuthMode;
   authLoading: boolean;
+  authError: string | null;
   authUser: User | null;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, name: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   updateLogo: (logoUrl: string) => Promise<void>;
-  biometricEnabled: boolean;
-  setBiometricEnabled: (b: boolean) => void;
 
   horses: Horse[];
   setHorses: React.Dispatch<React.SetStateAction<Horse[]>>;
@@ -104,9 +103,9 @@ function authSessionToUser(s: AuthSession): User {
 export function AppProvider({ children }: { children: ReactNode }) {
   const [authMode, setAuthMode] = useState<AuthMode>('demo');
   const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [biometricEnabled, setBiometricEnabled] = useState(false);
 
   const [ferrageOrders, setFerrageOrders] = useState<FerrageOrder[]>(mockFerrageOrders);
 
@@ -123,27 +122,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [weekSchedules, setWeekSchedules] = usePersistentCollection<WeekSchedule>('weekSchedules', authUser, mockWeekSchedules);
 
   const signIn = useCallback(async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { error: error.message };
-    const u = data.session ? authSessionToUser(data.session) : null;
-    setAuthUser(u);
-    setAuthMode('live');
-    if (u) setSession({ kind: 'trainer', user: u });
-    return { error: null };
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) return { error: error.message };
+      const u = data.session ? authSessionToUser(data.session) : null;
+      setAuthUser(u);
+      setAuthMode('live');
+      if (u) setSession({ kind: 'trainer', user: u });
+      return { error: null };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) };
+    }
   }, []);
 
   const signUp = useCallback(async (email: string, password: string, name: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { name } },
-    });
-    if (error) return { error: error.message };
-    const u = data.session ? authSessionToUser(data.session) : null;
-    setAuthUser(u);
-    setAuthMode('live');
-    if (u) setSession({ kind: 'trainer', user: u });
-    return { error: null };
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { name } },
+      });
+      if (error) return { error: error.message };
+      const u = data.session ? authSessionToUser(data.session) : null;
+      setAuthUser(u);
+      setAuthMode('live');
+      if (u) setSession({ kind: 'trainer', user: u });
+      return { error: null };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) };
+    }
   }, []);
 
   const signOut = useCallback(async () => {
@@ -162,14 +169,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        const u = authSessionToUser(data.session);
-        setAuthUser(u);
-        setAuthMode('live');
-        setSession({ kind: 'trainer', user: u });
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) setAuthError(error.message);
+        if (data.session) {
+          const u = authSessionToUser(data.session);
+          setAuthUser(u);
+          setAuthMode('live');
+          setSession({ kind: 'trainer', user: u });
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error('Supabase authentication initialization failed:', message);
+        setAuthError(message);
+      } finally {
+        setAuthLoading(false);
       }
-      setAuthLoading(false);
     })();
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       (async () => {
@@ -238,9 +253,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AppState>(
     () => ({
       session, setSession,
-      authMode, authLoading, authUser,
+      authMode, authLoading, authError, authUser,
       signIn, signUp, signOut, updateLogo,
-      biometricEnabled, setBiometricEnabled,
       horses, setHorses,
       employees, setEmployees,
       trainings, setTrainings,
@@ -256,7 +270,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       refreshFerrageOrders, fetchFerrageOrderByToken,
       getHorse, getEmployee, getTraining,
     }),
-    [session, authMode, authLoading, authUser, signIn, signUp, signOut, updateLogo, biometricEnabled, horses, employees, trainings, planning, soins, routines, tarifGrids, douches, elevageHorses, saillies, weekSchedules, ferrageOrders, refreshFerrageOrders, fetchFerrageOrderByToken, getHorse, getEmployee, getTraining],
+    [session, authMode, authLoading, authError, authUser, signIn, signUp, signOut, updateLogo, horses, employees, trainings, planning, soins, routines, tarifGrids, douches, elevageHorses, saillies, weekSchedules, ferrageOrders, refreshFerrageOrders, fetchFerrageOrderByToken, getHorse, getEmployee, getTraining],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

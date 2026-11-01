@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Plus, Trash2, CalendarDays, Copy, Eraser, ChevronLeft, ChevronRight, Check, X, StickyNote, FileText } from 'lucide-react';
 import { useApp } from '@/store';
-import type { PlanningEntry } from '@/types';
+import type { HorseStatus, PlanningEntry } from '@/types';
 import { employeeHasRole, todayISO, tomorrowISO, fmtDateLong, fmtDate, addDays, sameWeekday, lotColor } from '@/lib';
 import { Badge, Confirm, EmptyState, Modal } from './ui';
 import { generatePdf } from '@/pdfUtils';
@@ -19,7 +19,7 @@ export function PlanningPage() {
   const lots = useMemo(() => Array.from(new Set(dayEntries.map((p) => p.lot))).sort((a, b) => a - b), [dayEntries]);
 
   const assignedHorseIds = useMemo(() => new Set(dayEntries.map((p) => p.horseId)), [dayEntries]);
-  const availableHorses = horses.filter((h) => h.status === 'actif' && !assignedHorseIds.has(h.id));
+  const availableHorses = horses.filter((h) => h.status !== 'sorti' && !assignedHorseIds.has(h.id));
   const riders = employees.filter((e) => employeeHasRole(e, 'cavalier') || employeeHasRole(e, 'lad'));
 
   const lastWeekDate = addDays(date, -7);
@@ -241,7 +241,7 @@ export function PlanningPage() {
 
 function AddEntryModal({ lot, availableHorses, riders, trainings, onClose, onAdd }: {
   lot: number;
-  availableHorses: { id: string; name: string }[];
+  availableHorses: { id: string; name: string; status: HorseStatus }[];
   riders: { id: string; firstName: string; lastName: string }[];
   trainings: { id: string; name: string }[];
   onClose: () => void;
@@ -259,9 +259,9 @@ function AddEntryModal({ lot, availableHorses, riders, trainings, onClose, onAdd
         <div>
           <label className="label">Cheval ({availableHorses.length} disponible{availableHorses.length > 1 ? 's' : ''})</label>
           <select className="input" value={horseId} onChange={(e) => setHorseId(e.target.value)}>
-            {availableHorses.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+            {availableHorses.map((h) => <option key={h.id} value={h.id}>{h.name}{h.status === 'repos' ? ' (au repos)' : ''}</option>)}
           </select>
-          <p className="text-xs text-stable-500 mt-1.5">Les chevaux déjà attribués à un lot aujourd'hui sont exclus.</p>
+          <p className="text-xs text-stable-500 mt-1.5">Les chevaux déjà attribués ou sortis sont exclus. Les chevaux au repos peuvent être planifiés.</p>
         </div>
         <div>
           <label className="label">Cavalier</label>
