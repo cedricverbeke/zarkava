@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Lock, Phone, ShieldCheck, User as UserIcon, Eye, EyeOff, Sparkles, MessageCircle, UserPlus, LogIn } from 'lucide-react';
-import { useApp, trainerUser, supabase } from '@/store';
+import { useApp, trainerUser, supabase, ferrageRowToOrder } from '@/store';
+import { explainSupabaseError } from '@/supabaseClient';
 import type { Session } from '@/types';
 
 type Tab = 'signin' | 'signup' | 'field' | 'farrier';
@@ -66,17 +67,9 @@ export function LoginScreen() {
     const local = ferrageOrders.find((o) => o.token === token);
     if (local) { setSession({ kind: 'farrier', order: local }); return; }
     const { data, error } = await supabase.from('ferrage_orders').select('*').eq('token', token).maybeSingle();
-    if (error || !data) { setErr('Lien invalide ou expiré.'); return; }
-    const row = data as Record<string, unknown>;
-    let horses = row.horses as unknown;
-    if (typeof horses === 'string') { try { horses = JSON.parse(horses); } catch { horses = []; } }
-    setSession({ kind: 'farrier', order: {
-      id: row.id as string, token: row.token as string, createdAt: row.created_at as string, expiresAt: row.expires_at as string,
-      status: row.status as 'pending' | 'completed', completedAt: (row.completed_at as string) ?? undefined,
-      marechalId: (row.marechal_id as string) ?? undefined, marechalName: (row.marechal_name as string) ?? undefined,
-      appliedAt: (row.applied_at as string) ?? undefined,
-      horses: (horses as import('@/types').FerrageOrderHorse[]) ?? [],
-    }});
+    if (error) { setErr(explainSupabaseError(error)); return; }
+    if (!data) { setErr('Lien invalide ou expiré.'); return; }
+    setSession({ kind: 'farrier', order: ferrageRowToOrder(data as Record<string, unknown>) });
   }
 
   function resetErr() { setErr(''); }

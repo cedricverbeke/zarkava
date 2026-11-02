@@ -63,20 +63,16 @@ Ces deux variables sont nécessaires au frontend.
 Après les avoir ajoutées ou modifiées, déclenchez un nouveau déploiement : Vite
 intègre ces valeurs au moment du build, elles ne sont pas lues à chaud.
 
-### 4. Appliquer le schéma de la base Supabase
+### 4. Préparer la base Supabase
 
-Le déploiement du site ne crée pas les tables Supabase. Dans le **SQL Editor**
-du projet Supabase correspondant à l'URL configurée, exécutez chaque fichier
-non encore appliqué de `supabase/migrations/`, dans l'ordre chronologique de
-leurs noms. Ne relancez pas les migrations déjà appliquées. Sans ces tables et
-colonnes, l'application peut se connecter à Supabase mais échouer au chargement
-des données.
+Le déploiement du site ne crée pas les tables. Dans le **SQL Editor** du projet Supabase correspondant à
+l'URL configurée, collez le contenu de `supabase/schema.sql` et cliquez sur **Run**. Ce script unique remplace
+les anciennes migrations : il crée les tables manquantes, ajoute les colonnes absentes et remet les règles de
+sécurité à plat. Il peut être relancé à tout moment sans perdre de données.
 
-Après le déploiement de cette version, supprimez dans Supabase les Edge
-Functions `create-checkout-session` et `stripe-webhook` si elles y sont encore
-déployées, puis désactivez le webhook Stripe et supprimez les secrets Stripe
-du projet. Le retrait des fichiers du dépôt ne désinstalle pas les fonctions
-déjà présentes sur Supabase.
+Si des Edge Functions `create-checkout-session` ou `stripe-webhook` sont encore déployées sur Supabase (reste de
+l'ancien paiement Stripe), supprimez-les, désactivez le webhook côté Stripe et révoquez les clés Stripe.
+Retirer les fichiers du dépôt ne les désinstalle pas.
 
 ### 5. (Optionnel) Déploiement automatique par GitHub Actions
 
@@ -93,8 +89,20 @@ pendant ce build. Ajouter ces quatre secrets dans le repo GitHub
 
 Si Netlify déploie directement depuis GitHub, configurez les variables Supabase
 dans Netlify et désactivez ce workflow dans GitHub Actions pour éviter deux
-déploiements indépendants à chaque push. Les migrations Supabase restent à
-appliquer séparément dans les deux cas.
+déploiements indépendants à chaque push. Le script `supabase/schema.sql`
+reste à exécuter séparément dans les deux cas.
+
+## Dépannage : « Failed to fetch » / chargement des données impossible
+
+Le bandeau rouge en bas de l'écran indique la cause probable. Dans l'ordre :
+
+1. **Projet Supabase en pause** (offre gratuite après une semaine d'inactivité) : tableau de bord Supabase →
+   *Restore project*. Tant qu'il est en pause, toutes les requêtes échouent avec « Failed to fetch ».
+2. **Variables absentes ou erronées dans la version déployée** : `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` sont
+   figées au moment du build. Après toute modification (secrets GitHub ou variables Netlify), relancez un déploiement.
+   L'URL et la clé doivent venir du même projet (clé « anon », jamais « service_role »).
+3. **Tables ou colonnes manquantes** : exécutez `supabase/schema.sql` (voir plus haut).
+4. **Confirmation d'e-mail activée** : un nouveau compte doit cliquer sur le lien reçu avant de pouvoir se connecter.
 
 ## Structure
 
@@ -103,6 +111,6 @@ netlify.toml                      # config build + SPA redirect
 public/_redirects                 # fallback SPA (backup)
 .github/workflows/deploy-netlify.yml  # CI optionnelle
 supabase/
-  migrations/                     # schéma SQL Supabase
+  schema.sql                      # schéma SQL Supabase complet (à exécuter dans le SQL Editor)
 src/                              # application React
 ```

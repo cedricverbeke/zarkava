@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Anvil, Check, AlertCircle, CheckCircle2, Send, LogOut, X } from 'lucide-react';
-import { useApp, supabase } from '@/store';
-import type { FerrageOrder, FerrageOrderHorse } from '@/types';
+import { Anvil, Check, AlertCircle, CheckCircle2, Send, LogOut } from 'lucide-react';
+import { useApp, supabase, ferrageRowToOrder } from '@/store';
+import type { FerrageOrder } from '@/types';
 import { fmtDateLong, todayISO } from '@/lib';
 import { Modal } from './ui';
 
@@ -21,22 +21,7 @@ export function FarrierSession({ initialOrder }: { initialOrder: FerrageOrder })
       .eq('id', initialOrder.id)
       .maybeSingle();
     if (error || !data) return;
-    const row = data as Record<string, unknown>;
-    let horses = row.horses as unknown;
-    if (typeof horses === 'string') { try { horses = JSON.parse(horses); } catch { horses = []; } }
-    const fetched: FerrageOrder = {
-      id: row.id as string,
-      token: row.token as string,
-      createdAt: row.created_at as string,
-      expiresAt: row.expires_at as string,
-      status: row.status as 'pending' | 'completed',
-      completedAt: (row.completed_at as string) ?? undefined,
-      marechalId: (row.marechal_id as string) ?? undefined,
-      marechalName: (row.marechal_name as string) ?? undefined,
-      appliedAt: (row.applied_at as string) ?? undefined,
-      trainerObservation: (row.trainer_observation as string) ?? undefined,
-      horses: (horses as FerrageOrderHorse[]) ?? [],
-    };
+    const fetched = ferrageRowToOrder(data as Record<string, unknown>);
     setOrder(fetched);
     setValidated(fetched.status === 'completed');
     setLoading(false);
@@ -56,21 +41,21 @@ export function FarrierSession({ initialOrder }: { initialOrder: FerrageOrder })
     if (validated) return;
     const updatedHorses = order.horses.map((h) => h.horseId === horseId ? { ...h, done: !h.done } : h);
     setOrder((o) => ({ ...o, horses: updatedHorses }));
-    await supabase.from('ferrage_orders').update({ horses: JSON.stringify(updatedHorses) }).eq('id', order.id);
+    await supabase.from('ferrage_orders').update({ horses: updatedHorses }).eq('id', order.id);
   }
 
   async function setNote(horseId: string, note: string) {
     setNotes((n) => ({ ...n, [horseId]: note }));
     const updatedHorses = order.horses.map((h) => h.horseId === horseId ? { ...h, note } : h);
     setOrder((o) => ({ ...o, horses: updatedHorses }));
-    await supabase.from('ferrage_orders').update({ horses: JSON.stringify(updatedHorses) }).eq('id', order.id);
+    await supabase.from('ferrage_orders').update({ horses: updatedHorses }).eq('id', order.id);
   }
 
   async function setPrice(horseId: string, price: number) {
     if (validated) return;
     const updatedHorses = order.horses.map((h) => h.horseId === horseId ? { ...h, price } : h);
     setOrder((o) => ({ ...o, horses: updatedHorses }));
-    await supabase.from('ferrage_orders').update({ horses: JSON.stringify(updatedHorses) }).eq('id', order.id);
+    await supabase.from('ferrage_orders').update({ horses: updatedHorses }).eq('id', order.id);
   }
 
   async function validateAll() {
@@ -78,7 +63,7 @@ export function FarrierSession({ initialOrder }: { initialOrder: FerrageOrder })
     await supabase.from('ferrage_orders').update({
       status: 'completed',
       completed_at: today,
-      horses: JSON.stringify(order.horses),
+      horses: order.horses,
     }).eq('id', order.id);
     setOrder((o) => ({ ...o, status: 'completed', completedAt: today }));
     setValidated(true);

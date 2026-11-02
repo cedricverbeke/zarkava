@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AppProvider, useApp } from '@/store';
+import type { SupabaseProblem } from '@/supabaseClient';
 import { LoginScreen } from '@/components/Login';
 import { TrainerShell, type TrainerPage } from '@/components/TrainerShell';
 import { Dashboard } from '@/components/Dashboard';
@@ -47,27 +48,47 @@ function Router() {
   );
 }
 
+const COLLECTION_LABELS: Record<string, string> = {
+  horses: 'chevaux', employees: 'employés', trainings: 'entraînements', planning: 'planning', soins: 'soins',
+  routines: 'routines', tarifGrids: 'grilles tarifaires', douches: 'douches', elevageHorses: 'élevage',
+  saillies: 'saillies', weekSchedules: 'programmes de semaines', ferrage: 'bons de ferrage', profil: 'profil et logo',
+};
+
+// Affiche une seule fois chaque problème de lecture/écriture signalé par reportSupabaseProblem().
 function PersistenceNotice() {
-  const [error, setError] = useState<{ collection: string; operation: 'read' | 'write'; message: string } | null>(null);
+  const [problems, setProblems] = useState<SupabaseProblem[]>([]);
 
   useEffect(() => {
-    const onPersistenceError = (event: Event) => {
-      const detail = (event as CustomEvent<{ collection: string; operation: 'read' | 'write'; message: string }>).detail;
-      setError(detail);
+    const onProblem = (event: Event) => {
+      const problem = (event as CustomEvent<SupabaseProblem>).detail;
+      setProblems((prev) => (prev.some((p) => p.collection === problem.collection && p.operation === problem.operation) ? prev : [...prev, problem]));
     };
-    window.addEventListener('zarkava:persistence-error', onPersistenceError);
-    return () => window.removeEventListener('zarkava:persistence-error', onPersistenceError);
+    window.addEventListener('zarkava:persistence-error', onProblem);
+    return () => window.removeEventListener('zarkava:persistence-error', onProblem);
   }, []);
 
-  if (!error) return null;
-  const collection = error.collection === 'horses' ? 'chevaux' : error.collection;
-  const action = error.operation === 'read' ? 'chargement' : 'enregistrement';
+  if (problems.length === 0) return null;
+  const reading = problems.every((p) => p.operation === 'read');
+  const writing = problems.every((p) => p.operation === 'write');
+  const action = reading ? 'chargement' : writing ? 'enregistrement' : 'synchronisation';
+  const names = [...new Set(problems.map((p) => COLLECTION_LABELS[p.collection] ?? p.collection))].join(', ');
+  const messages = [...new Set(problems.map((p) => p.message))];
+  const details = [...new Set(problems.map((p) => p.detail))];
 
   return (
     <div role="alert" className="fixed bottom-4 left-4 right-4 z-[100] mx-auto max-w-2xl rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-900 shadow-lg">
-      <div className="font-semibold">Le {action} des données Supabase a échoué ({collection}).</div>
-      <div className="mt-1 break-words">{error.message}</div>
-      <button className="mt-2 font-semibold underline" onClick={() => setError(null)}>Fermer</button>
+      <div className="font-semibold">Le {action} des données Supabase a échoué ({names}).</div>
+      {messages.map((m) => <div key={m} className="mt-1 break-words">{m}</div>)}
+      {details.some((d) => !messages.includes(d)) && (
+        <details className="mt-2 text-xs text-red-800">
+          <summary className="cursor-pointer">Détail technique</summary>
+          {details.map((d) => <div key={d} className="mt-1 break-words font-mono">{d}</div>)}
+        </details>
+      )}
+      <div className="mt-2 flex gap-4">
+        <button className="font-semibold underline" onClick={() => window.location.reload()}>Réessayer</button>
+        <button className="font-semibold underline" onClick={() => setProblems([])}>Fermer</button>
+      </div>
     </div>
   );
 }

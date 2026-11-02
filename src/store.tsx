@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import type { AuthSession } from '@supabase/supabase-js';
 import type {
   AuthMode,
   Douche,
@@ -39,9 +40,8 @@ import {
   mockWeekSchedules,
   trainerUser,
 } from './data/mock';
-import { supabase } from './supabaseClient';
+import { supabase, supabaseConfigError, explainSupabaseError, reportSupabaseProblem } from './supabaseClient';
 import { usePersistentCollection, ferrageRowToOrder, ferrageOrderToRow } from './persistence';
-import type { AuthSession } from '@supabase/supabase-js';
 
 interface AppState {
   session: Session | null;
@@ -90,24 +90,26 @@ interface AppState {
 const Ctx = createContext<AppState | null>(null);
 
 function authSessionToUser(s: AuthSession): User {
-  const meta = s.user.user_metadata as { name?: string; logo_url?: string } | null;
+  // Le logo n'est PAS dans les métadonnées du compte : elles sont recopiées dans le jeton envoyé à chaque
+  // requête, et un logo (plusieurs dizaines de Ko) le rend trop gros (erreur 520). Il est dans la table profiles.
+  const meta = s.user.user_metadata as { name?: string } | null;
   return {
     id: s.user.id,
     email: s.user.email ?? '',
     name: meta?.name ?? s.user.email ?? 'Entraîneur',
     role: 'trainer',
-    logoUrl: meta?.logo_url,
   };
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [authMode, setAuthMode] = useState<AuthMode>('demo');
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authUser, setAuthUser] = useState<User | null>(null); // compte Supabase connecté (null en démo / terrain / maréchal)
   const [session, setSession] = useState<Session | null>(null);
-
   const [ferrageOrders, setFerrageOrders] = useState<FerrageOrder[]>(mockFerrageOrders);
+
+  const authMode: AuthMode = authUser ? 'live' : 'demo';
+  const authUserId = authUser?.id ?? null;
 
   const [horses, setHorses] = usePersistentCollection<Horse>('horses', authUser, mockHorses);
   const [employees, setEmployees] = usePersistentCollection<Employee>('employees', authUser, mockEmployees);
@@ -121,131 +123,171 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [saillies, setSaillies] = usePersistentCollection<Saillie>('saillies', authUser, mockSaillies);
   const [weekSchedules, setWeekSchedules] = usePersistentCollection<WeekSchedule>('weekSchedules', authUser, mockWeekSchedules);
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) return { error: error.message };
-      const u = data.session ? authSessionToUser(data.session) : null;
-      setAuthUser(u);
-      setAuthMode('live');
-      if (u) setSession({ kind: 'trainer', user: u });
-      return { error: null };
-    } catch (error) {
-      return { error: error instanceof Error ? error.message : String(error) };
-    }
-  }, []);
-
-  const signUp = useCallback(async (email: string, password: string, name: string) => {
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { data: { name } },
+  // --- Authentification -----------------------------------------------------------------
+  // Un seul point d'entrée pour tous les événements d'authentification (démarrage, connexion,
+  // renouvellement du jeton, déconnexion, session expirée).
+  const applyAuthSession = useCallback((s: AuthSession | null) => {
+    if (s) {
+      const user = authSessionToUser(s);
+      // Le renouvellement du jeton ne doit pas effacer le logo déjà chargé.
+      setAuthUser((prev) => ({ ...user, logoUrl: prev?.id === user.id ? prev.logoUrl : undefined }));
+      // On ne remplace pas une session maréchal / terrain ouverte par un lien ou un code.
+      setSession((prev) => {
+        if (prev && prev.kind !== 'trainer') return prev;
+        const logoUrl = prev?.kind === 'trainer' && prev.user.id === user.id ? prev.user.logoUrl : undefined;
+        return { kind: 'trainer', user: { ...user, logoUrl } };
       });
-      if (error) return { error: error.message };
-      const u = data.session ? authSessionToUser(data.session) : null;
-      setAuthUser(u);
-      setAuthMode('live');
-      if (u) setSession({ kind: 'trainer', user: u });
-      return { error: null };
-    } catch (error) {
-      return { error: error instanceof Error ? error.message : String(error) };
+    } else {
+      setAuthUser(null);
+      // Session Supabase terminée : on revient à l'écran de connexion au lieu d'afficher
+      // silencieusement les données de démonstration sous un compte censé être réel.
+      setSession((prev) => (prev?.kind === 'trainer' && !prev.user.isDemo ? null : prev));
     }
-  }, []);
-
-  const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
-    setAuthUser(null);
-    setAuthMode('demo');
-    setSession(null);
-  }, []);
-
-  const updateLogo = useCallback(async (logoUrl: string) => {
-    setAuthUser((u) => u ? { ...u, logoUrl } : u);
-    setSession((s) => s?.kind === 'trainer' ? { ...s, user: { ...s.user, logoUrl } } : s);
-    const { error } = await supabase.auth.updateUser({ data: { logo_url: logoUrl } });
-    if (error) console.warn('updateLogo:', error.message);
   }, []);
 
   useEffect(() => {
+    if (supabaseConfigError) {
+      setAuthError(supabaseConfigError);
+      setAuthLoading(false);
+      return;
+    }
+    let active = true;
+
+    supabase.auth.getSession()
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) setAuthError(explainSupabaseError(error));
+        applyAuthSession(data.session);
+      })
+      .catch((error) => { if (active) setAuthError(explainSupabaseError(error)); })
+      .finally(() => { if (active) setAuthLoading(false); });
+
+    // Pas d'appel Supabase dans ce callback (risque de blocage) : on ne fait que mettre l'état à jour.
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => applyAuthSession(s));
+
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+    };
+  }, [applyAuthSession]);
+
+  const signIn = useCallback(async (email: string, password: string) => {
+    if (supabaseConfigError) return { error: supabaseConfigError };
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) return { error: explainSupabaseError(error) };
+      setAuthError(null);
+      applyAuthSession(data.session);
+      return { error: null };
+    } catch (error) {
+      return { error: explainSupabaseError(error) };
+    }
+  }, [applyAuthSession]);
+
+  const signUp = useCallback(async (email: string, password: string, name: string) => {
+    if (supabaseConfigError) return { error: supabaseConfigError };
+    try {
+      const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { name } } });
+      if (error) return { error: explainSupabaseError(error) };
+      // Adresse déjà inscrite : Supabase renvoie alors un utilisateur sans identité, sans erreur.
+      if (data.user && data.user.identities?.length === 0) {
+        return { error: 'Un compte existe déjà avec cette adresse e-mail.' };
+      }
+      // Confirmation d'e-mail activée côté Supabase : pas de session tant que le lien n'a pas été cliqué.
+      if (!data.session) {
+        return { error: "Compte créé. Cliquez sur le lien de confirmation reçu par e-mail, puis connectez-vous. (Cette confirmation se désactive dans les réglages d'authentification de Supabase.)" };
+      }
+      setAuthError(null);
+      applyAuthSession(data.session);
+      return { error: null };
+    } catch (error) {
+      return { error: explainSupabaseError(error) };
+    }
+  }, [applyAuthSession]);
+
+  const signOut = useCallback(async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      /* hors ligne : on déconnecte quand même localement */
+    }
+    applyAuthSession(null);
+  }, [applyAuthSession]);
+
+  const applyLogo = useCallback((logoUrl: string) => {
+    setAuthUser((u) => (u ? { ...u, logoUrl } : u));
+    setSession((s) => (s?.kind === 'trainer' ? { ...s, user: { ...s.user, logoUrl } } : s));
+  }, []);
+
+  // Logo : lu et écrit dans la table profiles (une ligne par compte).
+  useEffect(() => {
+    if (!authUserId) return;
+    let cancelled = false;
     (async () => {
       try {
-        const { data, error } = await supabase.auth.getSession();
-        if (error) setAuthError(error.message);
-        if (data.session) {
-          const u = authSessionToUser(data.session);
-          setAuthUser(u);
-          setAuthMode('live');
-          setSession({ kind: 'trainer', user: u });
-        }
+        const { data, error } = await supabase.from('profiles').select('logo_url').eq('user_id', authUserId).maybeSingle();
+        if (cancelled) return;
+        if (error) { reportSupabaseProblem('profil', 'read', error); return; }
+        if (data?.logo_url) applyLogo(data.logo_url);
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error('Supabase authentication initialization failed:', message);
-        setAuthError(message);
-      } finally {
-        setAuthLoading(false);
+        if (!cancelled) reportSupabaseProblem('profil', 'read', error);
       }
     })();
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
-      (async () => {
-        if (s) {
-          const u = authSessionToUser(s);
-          setAuthUser(u);
-          setAuthMode('live');
-          setSession({ kind: 'trainer', user: u });
-        } else {
-          setAuthUser(null);
-          setAuthMode('demo');
-        }
-      })();
-    });
-    return () => { sub.subscription.unsubscribe(); };
-  }, []);
+    return () => { cancelled = true; };
+  }, [authUserId, applyLogo]);
 
+  const updateLogo = useCallback(async (logoUrl: string) => {
+    applyLogo(logoUrl);
+    if (!authUserId) return; // démo : le logo reste en mémoire
+    const { error } = await supabase.from('profiles').upsert({ user_id: authUserId, logo_url: logoUrl }, { onConflict: 'user_id' });
+    if (error) reportSupabaseProblem('profil', 'write', error);
+  }, [applyLogo, authUserId]);
+
+  // --- Bons de ferrage ---------------------------------------------------------------------
+  // Compte réel : ses bons (et les anciens bons sans propriétaire). Démo : bons fictifs, rien n'est lu en base.
   const refreshFerrageOrders = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('ferrage_orders')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (error) return;
-    setFerrageOrders((data as Record<string, unknown>[]).map(ferrageRowToOrder));
-  }, []);
-
-  const fetchFerrageOrderByToken = useCallback(async (token: string): Promise<FerrageOrder | null> => {
-    const { data, error } = await supabase
-      .from('ferrage_orders')
-      .select('*')
-      .eq('token', token)
-      .maybeSingle();
-    if (error || !data) return null;
-    return ferrageRowToOrder(data as Record<string, unknown>);
-  }, []);
+    if (!authUserId) {
+      setFerrageOrders(mockFerrageOrders);
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from('ferrage_orders')
+        .select('*')
+        .or(`user_id.eq.${authUserId},user_id.is.null`)
+        .order('created_at', { ascending: false });
+      if (error) { reportSupabaseProblem('ferrage', 'read', error); return; }
+      setFerrageOrders((data ?? []).map((row) => ferrageRowToOrder(row as Record<string, unknown>)));
+    } catch (error) {
+      reportSupabaseProblem('ferrage', 'read', error);
+    }
+  }, [authUserId]);
 
   useEffect(() => {
     refreshFerrageOrders();
   }, [refreshFerrageOrders]);
 
-  useEffect(() => {
-    const tryRestore = async () => {
-      const hash = window.location.hash || '';
-      const match = hash.match(/ferrage\/session\?token=([^&]+)/);
-      if (match) {
-        const token = decodeURIComponent(match[1]);
-        const order = await fetchFerrageOrderByToken(token);
-        if (order) {
-          setSession({ kind: 'farrier', order });
-          return true;
-        }
-      }
-      return false;
-    };
-    tryRestore();
-    const onHashChange = () => { tryRestore(); };
-    window.addEventListener('hashchange', onHashChange);
-    return () => window.removeEventListener('hashchange', onHashChange);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Accès maréchal : le lien magique est la clé d'accès (pas de compte).
+  const fetchFerrageOrderByToken = useCallback(async (token: string): Promise<FerrageOrder | null> => {
+    if (supabaseConfigError) return null;
+    const { data, error } = await supabase.from('ferrage_orders').select('*').eq('token', token).maybeSingle();
+    if (error || !data) return null;
+    return ferrageRowToOrder(data as Record<string, unknown>);
   }, []);
 
+  useEffect(() => {
+    const openFarrierLink = async () => {
+      const match = window.location.hash.match(/ferrage\/session\?token=([^&]+)/);
+      if (!match) return;
+      const order = await fetchFerrageOrderByToken(decodeURIComponent(match[1]));
+      if (order) setSession({ kind: 'farrier', order });
+    };
+    openFarrierLink();
+    window.addEventListener('hashchange', openFarrierLink);
+    return () => window.removeEventListener('hashchange', openFarrierLink);
+  }, [fetchFerrageOrderByToken]);
+
+  // --- Accès rapides ---------------------------------------------------------------------
   const getHorse = useCallback((id: string) => horses.find((h) => h.id === id), [horses]);
   const getEmployee = useCallback((id: string) => employees.find((e) => e.id === id), [employees]);
   const getTraining = useCallback((id: string) => trainings.find((t) => t.id === id), [trainings]);

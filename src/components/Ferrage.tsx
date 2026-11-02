@@ -82,7 +82,7 @@ export function FerragePage() {
       const entry = order.horses.find((x) => x.horseId === h.id && x.done);
       return entry ? { ...h, lastFerrure: today, lastFerrureBy: farrierName, lastFerrureNote: entry.note || '' } : h;
     }));
-    await supabase.from('ferrage_orders').update({ applied_at: today, horses: JSON.stringify(order.horses) }).eq('id', order.id);
+    await supabase.from('ferrage_orders').update({ applied_at: today, horses: order.horses }).eq('id', order.id);
     setFerrageOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, appliedAt: today } : o)));
   }
 
